@@ -23,7 +23,7 @@ export const GoogleSearchConsoleCard: React.FC<GoogleSearchConsoleCardProps> = (
               </span>
             </h3>
             <p className="text-xs text-slate-400">
-              Verified property sitemap submission & URL Inspection API coverage diagnostics
+              Actual API submissions and Google-reported URL Inspection results
             </p>
           </div>
         </div>
@@ -33,7 +33,7 @@ export const GoogleSearchConsoleCard: React.FC<GoogleSearchConsoleCardProps> = (
             status.isVerified ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
           }`}>
             <CheckCircle2 className="w-3.5 h-3.5" />
-            {status.authMethod === 'service_account' ? 'Live GSC Connected' : 'Sandbox Ready'}
+            {status.connected ? 'Live GSC Connected' : status.authMethod === 'simulation_sandbox' ? 'Sandbox Mode' : 'Not Connected'}
           </span>
         </div>
       </div>
@@ -49,7 +49,7 @@ export const GoogleSearchConsoleCard: React.FC<GoogleSearchConsoleCardProps> = (
           </span>
         </div>
         <p className="text-xs text-slate-300">
-          {status.sitemapSubmissionResult || 'Sitemap generated and scheduled for Google Search Console API submission.'}
+          {status.sitemapSubmissionResult || 'No sitemap submission confirmed yet.'}
         </p>
       </div>
 
@@ -80,7 +80,7 @@ export const GoogleSearchConsoleCard: React.FC<GoogleSearchConsoleCardProps> = (
       <div className="p-3 rounded-xl bg-slate-950/50 border border-slate-800/80 flex items-start gap-2.5 text-[11px] text-slate-400">
         <Info className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
         <div>
-          <span className="font-semibold text-slate-300">Compliance & Authority Guarantee: </span>
+          <span className="font-semibold text-slate-300">API status: </span>
           <span>{status.inspectionSummary.note}</span>
         </div>
       </div>
