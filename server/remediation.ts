@@ -75,32 +75,36 @@ Sitemap: ${sitemapTarget}
   /**
    * Generates an evidence-led remediation report. It is a review document, not a git-applicable patch.
    */
-  /**
-   * Generates a unified .patch / git diff bundle for all available fixes.
-   */
-  public static generateUnifiedPatch(issues: SeoIssue[], targetDomain: string): string {
-    const patchLines: string[] = [
-      `# AutoIndex AI Unified Remediation Patch Bundle`,
-      `# Target Domain: ${targetDomain}`,
-      `# Generated: ${new Date().toISOString()}`,
-      `# Instructions: Review and apply using 'git apply' or merge via GitHub Pull Request.`,
-      `===================================================================`,
+  public static generateRemediationReport(issues: SeoIssue[], targetDomain: string): string {
+    const lines = [
+      'AutoIndex AI — Technical SEO Remediation Report',
+      `Target domain: ${targetDomain}`,
+      `Generated at: ${new Date().toISOString()}`,
+      '',
+      'IMPORTANT: This is a review report containing proposed snippets, not an executable git patch.',
+      'No live website files have been changed by this application.',
+      'Verify each recommendation against the actual source code and deploy only through an authorized workflow.',
       ''
     ];
 
-    issues.forEach((issue, idx) => {
-      if (issue.proposedFix) {
-        patchLines.push(`--- a/${issue.proposedFix.targetFileOrElement.replace(/[^a-zA-Z0-9._/-]/g, '_')}`);
-        patchLines.push(`+++ b/${issue.proposedFix.targetFileOrElement.replace(/[^a-zA-Z0-9._/-]/g, '_')}`);
-        patchLines.push(`@@ Issue #${idx + 1}: ${issue.title} [${issue.severity.toUpperCase()}] @@`);
-        patchLines.push(`+ # Fix: ${issue.proposedFix.summary}`);
-        patchLines.push(`+ # Explanation: ${issue.proposedFix.explanation}`);
-        patchLines.push(issue.proposedFix.proposedCode.split('\n').map(l => `+ ${l}`).join('\n'));
-        patchLines.push('');
-      }
+    const candidates = issues.filter(issue => issue.proposedFix);
+    if (!candidates.length) lines.push('No proposed code snippets were generated for this audit.');
+    candidates.forEach((issue, index) => {
+      const fix = issue.proposedFix!;
+      lines.push(`[${index + 1}] ${issue.title} — ${issue.severity.toUpperCase()}`);
+      lines.push(`Affected URL: ${issue.affectedUrl}`);
+      lines.push(`Target element/file: ${fix.targetFileOrElement}`);
+      lines.push(`Evidence: ${issue.evidence}`);
+      lines.push(`Recommendation: ${issue.recommendation}`);
+      lines.push(`Proposed change: ${fix.summary}`);
+      lines.push(`Reason: ${fix.explanation}`);
+      lines.push('Proposed snippet:');
+      lines.push(fix.proposedCode);
+      lines.push('');
+      lines.push('---');
+      lines.push('');
     });
-
-    return patchLines.join('\n');
+    return lines.join('\\n');
   }
 
   private static validateXml(xml: string): boolean {
