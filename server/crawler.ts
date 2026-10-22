@@ -1,6 +1,5 @@
 import * as cheerio from 'cheerio';
 import { safeFetch, validateTargetUrl } from './security.ts';
-import { SandboxSiteManager } from './sandboxSite.ts';
 import { CrawledPage, SitemapInfo, RobotsTxtInfo, SeoIssue } from './types.ts';
 
 export interface CrawlOptions {
@@ -10,7 +9,6 @@ export interface CrawlOptions {
   customUrls?: string[];
   maxPages?: number;
   delayMs?: number;
-  isSandbox?: boolean;
 }
 
 export class TechnicalSeoCrawler {
@@ -30,18 +28,16 @@ export class TechnicalSeoCrawler {
     orphanPages: string[];
   }> {
     const maxPages = this.options.maxPages || 25;
-    const isSandbox = this.options.isSandbox || false;
-    const sandbox = SandboxSiteManager.getInstance();
 
     onProgress?.(5, 'crawling', 'Inspecting robots.txt and sitemap directives...');
     
     // 1. Fetch & Parse robots.txt
-    const robotsTxtInfo = await this.auditRobotsTxt(isSandbox, sandbox);
+    const robotsTxtInfo = await this.auditRobotsTxt();
     
     // 2. Discover & Parse Sitemap
     onProgress?.(15, 'crawling', 'Validating XML sitemaps and nested indexes...');
     const sitemapTarget = this.options.sitemapUrl || (robotsTxtInfo.sitemaps.length > 0 ? robotsTxtInfo.sitemaps[0] : `${this.options.seedUrl.replace(/\/$/, '')}/sitemap.xml`);
-    const sitemapInfo = await this.auditSitemap(sitemapTarget, isSandbox, sandbox);
+    const sitemapInfo = await this.auditSitemap(sitemapTarget);
 
     // Populate queue with seed URL
     this.enqueue(this.options.seedUrl, 0);
@@ -76,7 +72,7 @@ export class TechnicalSeoCrawler {
       onProgress?.(pct, 'crawling', `Crawling [${processedCount}/${maxPages}]: ${item.url}`);
 
       // Crawl individual page
-      const page = await this.crawlSinglePage(item.url, item.depth, isSandbox, sandbox);
+      const page = await this.crawlSinglePage(item.url, item.depth);
       this.crawledPages.push(page);
 
       // Delay to respect server policies
@@ -147,18 +143,12 @@ export class TechnicalSeoCrawler {
     }
   }
 
-  private async auditRobotsTxt(isSandbox: boolean, sandbox: SandboxSiteManager): Promise<RobotsTxtInfo> {
+  private async auditRobotsTxt(): Promise<RobotsTxtInfo> {
     const robotsUrl = `${this.options.seedUrl.replace(/\/$/, '')}/robots.txt`;
     try {
       let content = '';
-      if (isSandbox) {
-        content = sandbox.getRobotsTxt();
-      } else {
-        const res = await safeFetch(robotsUrl, { timeoutMs: 6000 });
-        if (res.status === 200) {
-          content = res.bodyText;
-        }
-      }
+      const res = await safeFetch(robotsUrl, { timeoutMs: 6000 });
+      if (res.status === 200) content = res.bodyText;
 
       if (!content) {
         return {
@@ -242,17 +232,11 @@ export class TechnicalSeoCrawler {
     }
   }
 
-  private async auditSitemap(sitemapUrl: string, isSandbox: boolean, sandbox: SandboxSiteManager): Promise<SitemapInfo> {
+  private async auditSitemap(sitemapUrl: string): Promise<SitemapInfo> {
     try {
       let xmlText = '';
-      if (isSandbox) {
-        xmlText = sandbox.getSitemapXml();
-      } else {
-        const res = await safeFetch(sitemapUrl, { timeoutMs: 8000 });
-        if (res.status === 200) {
-          xmlText = res.bodyText;
-        }
-      }
+      const res = await safeFetch(sitemapUrl, { timeoutMs: 8000 });
+      if (res.status === 200) xmlText = res.bodyText;
 
       if (!xmlText) {
         return {
@@ -316,7 +300,7 @@ export class TechnicalSeoCrawler {
     }
   }
 
-  private async crawlSinglePage(pageUrl: string, depth: number, isSandbox: boolean, sandbox: SandboxSiteManager): Promise<CrawledPage> {
+  private async crawlSinglePage(pageUrl: string, depth: number): Promise<CrawledPage> {
     const startTime = Date.now();
     let status = 200;
     let statusText = 'OK';
@@ -325,21 +309,12 @@ export class TechnicalSeoCrawler {
     let redirectChain: string[] = [pageUrl];
 
     try {
-      if (isSandbox) {
-        const u = new URL(pageUrl);
-        const res = sandbox.getPage(u.pathname);
-        status = res.status;
-        statusText = status === 200 ? 'OK' : status === 301 ? 'Moved Permanently' : 'Not Found';
-        headers = res.headers;
-        html = res.html;
-      } else {
-        const res = await safeFetch(pageUrl, { timeoutMs: 10000 });
-        status = res.status;
-        statusText = res.statusText;
-        headers = res.headers;
-        html = res.bodyText;
-        redirectChain = res.redirectChain;
-      }
+      const res = await safeFetch(pageUrl, { timeoutMs: 10000 });
+      status = res.status;
+      statusText = res.statusText;
+      headers = res.headers;
+      html = res.bodyText;
+      redirectChain = res.redirectChain;
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       status = 500;
@@ -508,7 +483,7 @@ export class TechnicalSeoCrawler {
         const resolvedHost = new URL(resolved).hostname;
         const currentHost = new URL(pageUrl).hostname;
 
-        if (resolvedHost === currentHost || (isSandbox && resolvedHost === 'sandbox.local')) {
+        if (resolvedHost === currentHost) {
           internalLinksCount++;
           const targetNorm = this.normalizeUrl(resolved);
           if (!this.internalLinksFound.has(targetNorm)) {
