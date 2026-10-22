@@ -147,6 +147,25 @@ export class GoogleSearchConsoleIntegration {
 
     try {
       const token = await getAccessToken(account, GSC_SCOPE);
+      const sitesResult = await googleRequest('https://www.googleapis.com/webmasters/v3/sites', token);
+      if (!sitesResult.response.ok) {
+        throw new Error(`Could not verify Search Console access (HTTP ${sitesResult.response.status}): ${sitesResult.data?.error?.message || 'Google API error'}`);
+      }
+      const availableSites: Array<{ siteUrl?: string; permissionLevel?: string }> = sitesResult.data?.siteEntry || [];
+      const propertyAccessible = availableSites.some(site => site.siteUrl === propertyUrl);
+      if (!propertyAccessible) {
+        return {
+          ...base,
+          authMethod: 'service_account',
+          sitemapSubmissionResult: `NOT SUBMITTED: the authenticated service account cannot access the exact Search Console property ${propertyUrl}. Add its client email as a user of that verified property, then retry.`,
+          inspectionSummary: {
+            ...base.inspectionSummary,
+            verdict: 'Search Console property access not confirmed',
+            coverageIssues: [`Property ${propertyUrl} was not present in the accessible Search Console site list.`],
+            note: 'No sitemap submission or URL Inspection was attempted because the exact property was not confirmed as accessible.'
+          }
+        };
+      }
       const sitemapApiUrl = `https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(propertyUrl)}/sitemaps/${encodeURIComponent(sitemapTarget)}`;
       const submission = await googleRequest(sitemapApiUrl, token, { method: 'PUT' });
       const sitemapSubmitted = submission.response.ok;
@@ -203,7 +222,7 @@ export class GoogleSearchConsoleIntegration {
         connected: sitemapSubmitted || totalInspected > 0,
         authMethod: 'service_account',
         propertyUrl,
-        isVerified: sitemapSubmitted || totalInspected > 0,
+        isVerified: true,
         sitemapSubmitted,
         sitemapSubmissionTime: sitemapSubmitted ? new Date().toISOString() : undefined,
         sitemapSubmissionResult,
