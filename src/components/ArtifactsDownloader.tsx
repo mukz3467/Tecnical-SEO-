@@ -16,7 +16,7 @@ export const ArtifactsDownloader: React.FC<ArtifactsDownloaderProps> = ({ job })
             <span>Downloadable Reports & Remediation Artifacts</span>
           </h3>
           <p className="text-xs text-slate-400">
-            Export validated technical assets, git patches, and audit datasets
+            Export generated technical assets, a remediation review report, and audit datasets
           </p>
         </div>
       </div>
@@ -46,13 +46,13 @@ export const ArtifactsDownloader: React.FC<ArtifactsDownloaderProps> = ({ job })
 
         {/* Unified Patch */}
         <a
-          href={`/api/jobs/${job.id}/download/patch`}
-          download={`remediation-${job.targetDomain}.patch`}
+          href={`/api/jobs/${job.id}/download/remediation-report`}
+          download={`remediation-report-${job.targetDomain}.txt`}
           className="flex flex-col items-center justify-center p-3 rounded-xl bg-slate-950 hover:bg-slate-800/80 border border-slate-800 text-slate-200 transition text-center group"
         >
           <Code2 className="w-5 h-5 text-amber-400 mb-1.5 group-hover:scale-110 transition" />
-          <span className="text-xs font-semibold">Remediation .patch</span>
-          <span className="text-[10px] text-slate-500">Unified git diff</span>
+          <span className="text-xs font-semibold">Remediation Report</span>
+          <span className="text-[10px] text-slate-500">Review before applying</span>
         </a>
 
         {/* CSV Issues */}
