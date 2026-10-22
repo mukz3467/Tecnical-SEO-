@@ -28,14 +28,9 @@ app.get('/api/status', (req, res) => {
       },
       searchConsoleApi: {
         configured: !!(process.env.GOOGLE_SERVICE_ACCOUNT_JSON || (process.env.GOOGLE_SEARCH_CONSOLE_CLIENT_EMAIL && process.env.GOOGLE_SEARCH_CONSOLE_PRIVATE_KEY)),
-        type: (process.env.GOOGLE_SERVICE_ACCOUNT_JSON || process.env.GOOGLE_SEARCH_CONSOLE_CLIENT_EMAIL) ? 'live_service_account' : 'not_configured',
+        type: (process.env.GOOGLE_SERVICE_ACCOUNT_JSON || (process.env.GOOGLE_SEARCH_CONSOLE_CLIENT_EMAIL && process.env.GOOGLE_SEARCH_CONSOLE_PRIVATE_KEY)) ? 'live_service_account' : 'not_configured',
         description: 'Official Google Search Console API for sitemap submission and URL Inspection data'
       },
-      githubIntegration: {
-        configured: !!process.env.GITHUB_TOKEN,
-        type: process.env.GITHUB_TOKEN ? 'live_github_api' : 'downloadable_patch_bundle',
-        description: 'GitHub automated PR creation and repository code remediation'
-      }
     }
   });
 });
