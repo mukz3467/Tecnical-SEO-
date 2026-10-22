@@ -2,25 +2,15 @@ import React, { useState, useMemo } from 'react';
 import { 
   AlertOctagon, AlertTriangle, Info, CheckCircle2, 
   ChevronDown, ChevronRight, Search, 
-  Code2, ExternalLink, ShieldAlert, Sparkles, Filter 
+  Code2, ExternalLink, ShieldAlert, Sparkles, Filter, Undo2 
 } from 'lucide-react';
 import { SeoIssue, IssueCategory, IssueSeverity, FixStatus } from '../types.ts';
 
 interface IssuesTableProps {
   issues: SeoIssue[];
-  onApplyFix: (issueId: string) => void;
-  onRollbackFix: (issueId: string) => void;
-  onApplyAllSafeFixes: () => void;
-  isApplying?: boolean;
 }
 
-export const IssuesTable: React.FC<IssuesTableProps> = ({
-  issues,
-  onApplyFix,
-  onRollbackFix,
-  onApplyAllSafeFixes,
-  isApplying
-}) => {
+export const IssuesTable: React.FC<IssuesTableProps> = ({ issues }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedSeverity, setSelectedSeverity] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
