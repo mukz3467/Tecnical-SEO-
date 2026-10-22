@@ -117,7 +117,7 @@ export interface RobotsTxtInfo {
 
 export interface GoogleSearchConsoleStatus {
   connected: boolean;
-  authMethod: 'service_account' | 'oauth' | 'unconfigured' | 'simulation_sandbox';
+  authMethod: 'service_account' | 'oauth' | 'unconfigured';
   propertyUrl?: string;
   isVerified: boolean;
   sitemapSubmitted: boolean;
@@ -166,7 +166,7 @@ export interface AuditJob {
   sitemapUrl?: string;
   customUrls?: string[];
   autoFixEnabled: boolean;
-  connectedSourceMode: 'none' | 'sandbox_workspace' | 'github_pr' | 'download_patch_only';
+  connectedSourceMode: 'none' | 'download_patch_only';
   status: 'queued' | 'crawling' | 'auditing' | 'remediating' | 'validating' | 'submitting_sitemap' | 'completed' | 'failed' | 'cancelled';
   progress: number; // 0 - 100
   currentStage: string;
