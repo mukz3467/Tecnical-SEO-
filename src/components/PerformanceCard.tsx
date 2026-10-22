@@ -39,7 +39,7 @@ export const PerformanceCard: React.FC<PerformanceCardProps> = ({ metrics }) => 
         </div>
 
         <div className="flex items-center gap-2">
-          <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${getScoreColor(metrics.score)}`}>
+          <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${getScoreColor(metrics.score ?? 0)}`}>
             {metrics.score !== undefined ? `${metrics.score} / 100` : 'Unavailable'}
           </span>
         </div>
