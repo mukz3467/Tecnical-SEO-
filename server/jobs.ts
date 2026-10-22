@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import { waitUntil } from '@vercel/functions';
 import fs from 'fs';
 import path from 'path';
 import { AuditJob, SeoIssue } from './types.ts';
@@ -8,7 +9,7 @@ import { analyzePerformance } from './pagespeed.ts';
 import { GoogleSearchConsoleIntegration } from './gsc.ts';
 import { RemediationEngine } from './remediation.ts';
 
-const JOBS_DIR = path.resolve(process.cwd(), '.data');
+const JOBS_DIR = process.env.VERCEL ? path.join('/tmp', 'autoindex-jobs') : path.resolve(process.cwd(), '.data');
 const JOBS_FILE = path.join(JOBS_DIR, 'jobs.json');
 
 export class JobManager {
@@ -140,10 +141,10 @@ export class JobManager {
     this.jobs.set(id, job);
     this.saveJobsToDisk();
 
-    // Start background worker execution
-    this.runJobPipeline(job).catch(err => {
+    // Keep background work alive after the response in Vercel's function runtime.
+    const pipeline = this.runJobPipeline(job).catch(err => {
       job.status = 'failed';
-      job.error = err.message || String(err);
+      job.error = err instanceof Error ? err.message : String(err);
       job.logs.push({
         timestamp: new Date().toISOString(),
         level: 'error',
@@ -151,6 +152,12 @@ export class JobManager {
       });
       this.saveJobsToDisk();
     });
+
+    if (process.env.VERCEL === '1') {
+      waitUntil(pipeline);
+    } else {
+      void pipeline;
+    }
 
     return job;
   }
