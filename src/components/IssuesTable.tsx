@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { 
   AlertOctagon, AlertTriangle, Info, CheckCircle2, 
-  Wrench, Undo2, ChevronDown, ChevronRight, Search, 
+  ChevronDown, ChevronRight, Search, 
   Code2, ExternalLink, ShieldAlert, Sparkles, Filter 
 } from 'lucide-react';
 import { SeoIssue, IssueCategory, IssueSeverity, FixStatus } from '../types.ts';
