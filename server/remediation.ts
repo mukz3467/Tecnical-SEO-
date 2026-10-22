@@ -1,6 +1,5 @@
 import * as cheerio from 'cheerio';
 import { SeoIssue, AuditJob, CrawledPage } from './types.ts';
-import { SandboxSiteManager } from './sandboxSite.ts';
 
 export class RemediationEngine {
   /**
@@ -56,199 +55,26 @@ Sitemap: ${sitemapTarget}
    * Apply an authorized fix for an individual issue.
    */
   public static async applyFix(
-    issue: SeoIssue,
-    job: AuditJob,
-    isAuthorized: boolean = true
+    _issue: SeoIssue,
+    _job: AuditJob,
+    _isAuthorized: boolean = false
   ): Promise<{ success: boolean; message: string; diff?: string }> {
-    if (!issue.proposedFix) {
-      return { success: false, message: 'No automatic fix is available for this issue.' };
-    }
+    return {
+      success: false,
+      message: 'Live website writes are not configured. No changes were applied. Use the reviewed remediation report with an authorized source-control or hosting workflow.'
+    };
+  }
 
-    if (!isAuthorized) {
-      return { success: false, message: 'Fix was not authorized by the user. Authorization required.' };
-    }
-
-    const sandbox = SandboxSiteManager.getInstance();
-    const isSandboxTarget = job.targetDomain === 'sandbox.local' || job.connectedSourceMode === 'sandbox_workspace';
-
-    try {
-      if (isSandboxTarget) {
-        // Direct remediation on sandbox workspace
-        const urlObj = new URL(issue.affectedUrl);
-        const pathname = urlObj.pathname || '/';
-
-        if (issue.fixType === 'sitemap') {
-          const cleanXml = this.generateCleanSitemap(job.crawledPages, job.targetDomain);
-          // Save rollback
-          issue.rollbackData = {
-            snapshot: sandbox.getSitemapXml(),
-            timestamp: new Date().toISOString()
-          };
-          sandbox.setSitemapXml(cleanXml);
-          job.generatedSitemapXml = cleanXml;
-
-          // Validation
-          const isValidXml = this.validateXml(cleanXml);
-          if (!isValidXml) {
-            issue.fixStatus = 'failed_validation';
-            return { success: false, message: 'Validation failed: Generated XML sitemap was invalid.' };
-          }
-
-          issue.fixStatus = 'validated';
-          issue.appliedAt = new Date().toISOString();
-          issue.validationResult = {
-            passed: true,
-            details: 'Sanitized XML sitemap generated with 0 broken or staging URLs.',
-            timestamp: new Date().toISOString()
-          };
-          return { success: true, message: 'Sanitized XML sitemap generated and deployed.', diff: cleanXml };
-        }
-
-        if (issue.fixType === 'robots') {
-          const cleanRobots = this.generateOptimizedRobotsTxt(job.targetDomain);
-          issue.rollbackData = {
-            snapshot: sandbox.getRobotsTxt(),
-            timestamp: new Date().toISOString()
-          };
-          sandbox.setRobotsTxt(cleanRobots);
-          job.generatedRobotsTxt = cleanRobots;
-
-          issue.fixStatus = 'validated';
-          issue.appliedAt = new Date().toISOString();
-          issue.validationResult = {
-            passed: true,
-            details: 'Validated robots.txt with active Sitemap declaration.',
-            timestamp: new Date().toISOString()
-          };
-          return { success: true, message: 'Optimized robots.txt applied and validated.', diff: cleanRobots };
-        }
-
-        // HTML Remediation
-        const pageState = sandbox.getPage(pathname);
-        if (pageState.status === 200) {
-          const originalHtml = pageState.html;
-          const $ = cheerio.load(originalHtml);
-
-          // Apply specific HTML fix
-          if (issue.fixType === 'html_canonical') {
-            $('link[rel="canonical"]').remove();
-            $('head').append(`\n  <link rel="canonical" href="${issue.affectedUrl}" />`);
-          } else if (issue.fixType === 'html_meta') {
-            if (issue.title.includes('Viewport')) {
-              $('meta[name="viewport"]').remove();
-              $('head').prepend(`\n  <meta name="viewport" content="width=device-width, initial-scale=1.0" />`);
-            } else if (issue.title.includes('Language')) {
-              $('html').attr('lang', 'en');
-            } else if (issue.title.includes('Title') || issue.title.includes('Meta Description')) {
-              // Do not invent business-specific SEO copy from a domain name.
-              // Leave the live/sandbox HTML unchanged until a human supplies accurate content.
-              issue.fixStatus = 'available';
-              return {
-                success: false,
-                message: 'Human review required: provide an accurate page-specific title or meta description before applying this fix.'
-              };
-            }
-          } else if (issue.fixType === 'html_image') {
-            $('img').each((_, el) => {
-              // Alt text and intrinsic dimensions are content-specific; never invent them.
-              // Only add lazy loading where absent. Dimensions must come from the actual asset.
-              if (!$(el).attr('loading')) {
-                $(el).attr('loading', 'lazy');
-              }
-            });
-          } else if (issue.fixType === 'jsonld') {
-            // Preserve existing structured data; deleting it can remove valid business-specific schema.
-            // Only add generic WebSite schema when no JSON-LD exists and the domain is a suitable canonical host.
-            if ($('script[type="application/ld+json"]').length > 0) {
-              issue.fixStatus = 'available';
-              return { success: false, message: 'Human review required: existing JSON-LD was preserved to avoid overwriting valid structured data.' };
-            }
-            const validJsonLd = {
-              '@context': 'https://schema.org',
-              '@type': 'WebSite',
-              'name': job.targetDomain,
-              'url': `https://${job.targetDomain}/`
-            };
-            $('head').append(`\n  <script type="application/ld+json">\n${JSON.stringify(validJsonLd, null, 2)}\n  </script>`);
-          }
-
-          const modifiedHtml = $.html();
-
-          // Validation step: ensure valid HTML
-          const test$ = cheerio.load(modifiedHtml);
-          const headExists = test$('head').length > 0;
-          if (!headExists) {
-            issue.fixStatus = 'failed_validation';
-            return { success: false, message: 'Validation failed: Resulting HTML structure was damaged.' };
-          }
-
-          // Record rollback snapshot
-          issue.rollbackData = {
-            snapshot: originalHtml,
-            timestamp: new Date().toISOString()
-          };
-
-          sandbox.updatePageHtml(pathname, modifiedHtml, issue.proposedFix.summary);
-          issue.fixStatus = 'validated';
-          issue.appliedAt = new Date().toISOString();
-          issue.validationResult = {
-            passed: true,
-            details: `Validated fix: ${issue.proposedFix.summary}. Syntactic check passed.`,
-            timestamp: new Date().toISOString()
-          };
-
-          return {
-            success: true,
-            message: `Fix applied and verified on ${pathname}.`,
-            diff: `Target: ${issue.proposedFix.targetFileOrElement}\nProposed:\n${issue.proposedFix.proposedCode}`
-          };
-        }
-      }
-
-      // For external target sites without direct write access:
-      // Produce downloadable verified patch and instructions
-      issue.fixStatus = 'available';
-      return {
-        success: true,
-        message: 'Patch verified and ready in downloadable patch bundle.',
-        diff: `Target: ${issue.proposedFix.targetFileOrElement}\nFix Code:\n${issue.proposedFix.proposedCode}`
-      };
-    } catch (err: unknown) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      issue.fixStatus = 'failed_validation';
-      return { success: false, message: `Error applying fix: ${errorMsg}` };
-    }
+  public static rollbackFix(_issue: SeoIssue, _job: AuditJob): { success: boolean; message: string } {
+    return {
+      success: false,
+      message: 'Rollback is unavailable because this application did not modify live website files.'
+    };
   }
 
   /**
-   * Rollback an applied fix.
+   * Generates an evidence-led remediation report. It is a review document, not a git-applicable patch.
    */
-  public static rollbackFix(issue: SeoIssue, job: AuditJob): { success: boolean; message: string } {
-    if (!issue.rollbackData || !issue.rollbackData.snapshot) {
-      return { success: false, message: 'No rollback snapshot available for this fix.' };
-    }
-
-    const sandbox = SandboxSiteManager.getInstance();
-    const isSandboxTarget = job.targetDomain === 'sandbox.local' || job.connectedSourceMode === 'sandbox_workspace';
-
-    if (isSandboxTarget) {
-      if (issue.fixType === 'sitemap') {
-        sandbox.setSitemapXml(issue.rollbackData.snapshot);
-      } else if (issue.fixType === 'robots') {
-        sandbox.setRobotsTxt(issue.rollbackData.snapshot);
-      } else {
-        const urlObj = new URL(issue.affectedUrl);
-        sandbox.updatePageHtml(urlObj.pathname || '/', issue.rollbackData.snapshot, 'Rolled back');
-      }
-    }
-
-    issue.fixStatus = 'rolled_back';
-    delete issue.appliedAt;
-    delete issue.validationResult;
-
-    return { success: true, message: `Fix successfully rolled back to previous snapshot (${issue.rollbackData.timestamp}).` };
-  }
-
   /**
    * Generates a unified .patch / git diff bundle for all available fixes.
    */
