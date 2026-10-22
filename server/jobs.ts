@@ -82,7 +82,6 @@ export class JobManager {
     }
 
     const domain = urlObj.hostname;
-    const isSandbox = false;
 
     const job: AuditJob = {
       id,
@@ -133,7 +132,7 @@ export class JobManager {
         {
           timestamp: new Date().toISOString(),
           level: 'info',
-          message: `Job initialized for target: ${urlObj.origin} (${isSandbox ? 'Interactive Sandbox Mode' : 'Live Web Audit'})`
+          message: `Job initialized for target: ${urlObj.origin} (Live Web Audit)`
         }
       ]
     };
@@ -142,7 +141,7 @@ export class JobManager {
     this.saveJobsToDisk();
 
     // Start background worker execution
-    this.runJobPipeline(job, isSandbox).catch(err => {
+    this.runJobPipeline(job).catch(err => {
       job.status = 'failed';
       job.error = err.message || String(err);
       job.logs.push({
@@ -156,7 +155,7 @@ export class JobManager {
     return job;
   }
 
-  private async runJobPipeline(job: AuditJob, isSandbox: boolean) {
+  private async runJobPipeline(job: AuditJob) {
     const addLog = (level: 'info' | 'warn' | 'error' | 'success', message: string) => {
       job.logs.push({ timestamp: new Date().toISOString(), level, message });
     };
@@ -173,9 +172,8 @@ export class JobManager {
         seedUrl: job.targetUrl,
         sitemapUrl: job.sitemapUrl,
         customUrls: job.customUrls,
-        maxPages: isSandbox ? 15 : 30,
-        delayMs: isSandbox ? 50 : 250,
-        isSandbox
+        maxPages: 30,
+        delayMs: 250
       });
 
       const crawlResult = await crawler.runCrawl((progress, stage, message) => {
