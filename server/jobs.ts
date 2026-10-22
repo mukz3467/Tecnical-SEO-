@@ -253,7 +253,11 @@ export class JobManager {
         job.crawledPages,
         job.sitemapInfo
       );
-      addLog('success', job.searchConsoleStatus.sitemapSubmissionResult || 'Sitemap submission finalized.');
+      if (job.searchConsoleStatus.sitemapSubmitted) {
+        addLog('success', job.searchConsoleStatus.sitemapSubmissionResult || 'Google Search Console confirmed sitemap submission.');
+      } else {
+        addLog('warn', job.searchConsoleStatus.sitemapSubmissionResult || 'Sitemap was not submitted to Google Search Console.');
+      }
 
       // Stage 6: Completion & Stats
       job.status = 'completed';
