@@ -142,20 +142,20 @@ export interface PerformanceMetrics {
   source: 'google_pagespeed_api' | 'local_diagnostics';
   isFieldData: boolean;
   fieldDataNotice: string;
-  score: number; // 0 - 100
+  score?: number; // Only present when returned by the real PageSpeed API
   metrics: {
-    ttfbMs: number;
+    ttfbMs?: number;
     lcpMs?: number;
     cls?: number;
     inpMs?: number;
     fcpMs?: number;
   };
   diagnostics: {
-    oversizedImages: number;
-    missingDimensionsCount: number;
-    renderBlockingResources: number;
-    uncompressedResponses: number;
-    cachingOpportunities: number;
+    oversizedImages?: number;
+    missingDimensionsCount?: number;
+    renderBlockingResources?: number;
+    uncompressedResponses?: number;
+    cachingOpportunities?: number;
   };
 }
 
