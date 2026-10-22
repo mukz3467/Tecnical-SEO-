@@ -1,6 +1,6 @@
-import { URL, isIP } from 'node:url';
+import { URL } from 'node:url';
 import dns from 'node:dns/promises';
-import net from 'node:net';
+import net, { isIP } from 'node:net';
 
 function ipv4ToNumber(ip: string): number | undefined {
   if (net.isIPv4(ip) !== 1) return undefined;
