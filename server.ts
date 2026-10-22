@@ -26,11 +26,11 @@ app.get('/api/status', (req, res) => {
       pagespeedApi: {
         configured: !!process.env.PAGESPEED_API_KEY,
         type: process.env.PAGESPEED_API_KEY ? 'live_google_api' : 'local_diagnostics_engine',
-        description: 'Google PageSpeed Insights API for real-user CrUX field data and Lighthouse diagnostics'
+        description: 'Google PageSpeed Insights API for Lighthouse lab diagnostics and field data when available'
       },
       searchConsoleApi: {
-        configured: !!(process.env.GOOGLE_SEARCH_CONSOLE_CLIENT_EMAIL && process.env.GOOGLE_SEARCH_CONSOLE_PRIVATE_KEY),
-        type: process.env.GOOGLE_SEARCH_CONSOLE_CLIENT_EMAIL ? 'live_service_account' : 'simulation_sandbox',
+        configured: !!(process.env.GOOGLE_SERVICE_ACCOUNT_JSON || (process.env.GOOGLE_SEARCH_CONSOLE_CLIENT_EMAIL && process.env.GOOGLE_SEARCH_CONSOLE_PRIVATE_KEY)),
+        type: (process.env.GOOGLE_SERVICE_ACCOUNT_JSON || process.env.GOOGLE_SEARCH_CONSOLE_CLIENT_EMAIL) ? 'live_service_account' : 'not_configured',
         description: 'Official Google Search Console API for sitemap submission and URL Inspection data'
       },
       githubIntegration: {
