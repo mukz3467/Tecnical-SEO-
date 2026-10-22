@@ -45,7 +45,7 @@ app.post('/api/validate-target', async (req, res) => {
 // -------------------------------------------------------------
 app.post('/api/jobs', async (req, res) => {
   try {
-    const { targetUrl, sitemapUrl, customUrls, autoFixEnabled, connectedSourceMode } = req.body;
+    const { targetUrl, sitemapUrl, customUrls, autoFixEnabled } = req.body || {};
     if (!targetUrl) {
       return res.status(400).json({ error: 'targetUrl is required' });
     }
@@ -55,11 +55,45 @@ app.post('/api/jobs', async (req, res) => {
       return res.status(400).json({ error: validation.reason || 'Target URL failed security validation.' });
     }
 
+    const targetHost = new URL(validation.normalizedUrl).hostname.toLowerCase();
+    let normalizedSitemapUrl: string | undefined;
+    if (sitemapUrl) {
+      if (typeof sitemapUrl !== 'string') {
+        return res.status(400).json({ error: 'sitemapUrl must be a URL string.' });
+      }
+      const sitemapCheck = await validateTargetUrl(sitemapUrl, false);
+      if (!sitemapCheck.isSafe || !sitemapCheck.normalizedUrl) {
+        return res.status(400).json({ error: sitemapCheck.reason || 'Sitemap URL failed security validation.' });
+      }
+      if (new URL(sitemapCheck.normalizedUrl).hostname.toLowerCase() !== targetHost) {
+        return res.status(400).json({ error: 'Sitemap URL must use the same hostname as the target website.' });
+      }
+      normalizedSitemapUrl = sitemapCheck.normalizedUrl;
+    }
+
+    let normalizedCustomUrls: string[] | undefined;
+    if (customUrls !== undefined) {
+      if (!Array.isArray(customUrls) || customUrls.length > 100 || customUrls.some((url: unknown) => typeof url !== 'string')) {
+        return res.status(400).json({ error: 'customUrls must be an array of at most 100 URL strings.' });
+      }
+      normalizedCustomUrls = [];
+      for (const rawUrl of customUrls as string[]) {
+        const urlCheck = await validateTargetUrl(rawUrl, false);
+        if (!urlCheck.isSafe || !urlCheck.normalizedUrl) {
+          return res.status(400).json({ error: urlCheck.reason || 'A custom URL failed security validation.' });
+        }
+        if (new URL(urlCheck.normalizedUrl).hostname.toLowerCase() !== targetHost) {
+          return res.status(400).json({ error: 'Every custom URL must use the same hostname as the target website.' });
+        }
+        normalizedCustomUrls.push(urlCheck.normalizedUrl);
+      }
+    }
+
     const job = jobManager.createJob({
       targetUrl: validation.normalizedUrl,
-      sitemapUrl,
-      customUrls,
-      autoFixEnabled,
+      sitemapUrl: normalizedSitemapUrl,
+      customUrls: normalizedCustomUrls,
+      autoFixEnabled: autoFixEnabled !== false,
       connectedSourceMode: 'download_patch_only'
     });
 
