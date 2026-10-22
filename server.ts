@@ -2,7 +2,6 @@ import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import { JobManager } from './server/jobs.ts';
-import { SandboxSiteManager } from './server/sandboxSite.ts';
 import { validateTargetUrl } from './server/security.ts';
 import { RemediationEngine } from './server/remediation.ts';
 
@@ -13,7 +12,6 @@ const isProd = process.env.NODE_ENV === 'production';
 app.use(express.json());
 
 const jobManager = JobManager.getInstance();
-const sandboxManager = SandboxSiteManager.getInstance();
 
 // -------------------------------------------------------------
 // 1. HEALTH & INTEGRATION STATUS
@@ -47,7 +45,7 @@ app.get('/api/status', (req, res) => {
 // -------------------------------------------------------------
 app.post('/api/validate-target', async (req, res) => {
   const { url } = req.body;
-  const result = await validateTargetUrl(url);
+  const result = await validateTargetUrl(url, false);
   res.json(result);
 });
 
@@ -61,12 +59,17 @@ app.post('/api/jobs', async (req, res) => {
       return res.status(400).json({ error: 'targetUrl is required' });
     }
 
+    const validation = await validateTargetUrl(targetUrl, false);
+    if (!validation.isSafe || !validation.normalizedUrl) {
+      return res.status(400).json({ error: validation.reason || 'Target URL failed security validation.' });
+    }
+
     const job = jobManager.createJob({
-      targetUrl,
+      targetUrl: validation.normalizedUrl,
       sitemapUrl,
       customUrls,
       autoFixEnabled,
-      connectedSourceMode
+      connectedSourceMode: 'download_patch_only'
     });
 
     res.status(201).json(job);
@@ -123,16 +126,10 @@ app.post('/api/jobs/:id/apply-all-safe-fixes', async (req, res) => {
     return res.status(404).json({ error: 'Job not found' });
   }
 
-  let appliedCount = 0;
-  for (const issue of job.issues) {
-    if (issue.proposedFix?.isSafeToAutoApply && (issue.fixStatus === 'available' || issue.fixStatus === 'rolled_back')) {
-      const r = await RemediationEngine.applyFix(issue, job, true);
-      if (r.success) appliedCount++;
-    }
-  }
-
-  jobManager.refreshSummary(job);
-  res.json({ success: true, message: `Applied ${appliedCount} safe fixes and validated successfully.` });
+  return res.status(409).json({
+    success: false,
+    message: 'Patch-only mode: no live website files are modified by this deployment. Download the remediation report and apply reviewed changes through an authorized source-control or hosting integration.'
+  });
 });
 
 // -------------------------------------------------------------
@@ -200,46 +197,7 @@ app.get('/api/jobs/:id/download/patch', (req, res) => {
 });
 
 // -------------------------------------------------------------
-// 6. BUILT-IN SANDBOX TEST SITE ENDPOINTS
-// -------------------------------------------------------------
-app.get('/api/sandbox-site/robots.txt', (req, res) => {
-  res.setHeader('Content-Type', 'text/plain');
-  res.send(sandboxManager.getRobotsTxt());
-});
-
-app.get('/api/sandbox-site/sitemap.xml', (req, res) => {
-  res.setHeader('Content-Type', 'application/xml');
-  res.send(sandboxManager.getSitemapXml());
-});
-
-app.post('/api/sandbox-site/reset', (req, res) => {
-  sandboxManager.resetToFlawedDefaults();
-  res.json({ success: true, message: 'Sandbox test website reset to initial flawed state with all SEO issues.' });
-});
-
-app.get('/api/sandbox-site/preview', (req, res) => {
-  const pages = sandboxManager.getAllPages();
-  res.json({
-    robotsTxt: sandboxManager.getRobotsTxt(),
-    sitemapXml: sandboxManager.getSitemapXml(),
-    pages: pages.map(p => ({
-      path: p.path,
-      fixesApplied: p.appliedFixes
-    }))
-  });
-});
-
-app.use('/api/sandbox-site', (req, res) => {
-  const targetPath = req.path || '/';
-  const pageResult = sandboxManager.getPage(targetPath);
-  for (const [k, v] of Object.entries(pageResult.headers)) {
-    res.setHeader(k, v);
-  }
-  res.status(pageResult.status).send(pageResult.html);
-});
-
-// -------------------------------------------------------------
-// 7. VITE DEV SERVER / STATIC SERVING
+// 6. VITE DEV SERVER / STATIC SERVING
 // -------------------------------------------------------------
 async function startServer() {
   if (!isProd) {
