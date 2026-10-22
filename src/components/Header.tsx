@@ -1,16 +1,14 @@
 import React from 'react';
-import { ShieldCheck, Settings, RefreshCw, Cpu, ExternalLink } from 'lucide-react';
+import { Settings, RefreshCw, Cpu } from 'lucide-react';
 
 interface HeaderProps {
   onOpenSettings: () => void;
-  onOpenSandboxModal: () => void;
   activeJobId?: string;
   isProcessing?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   onOpenSettings,
-  onOpenSandboxModal,
   activeJobId,
   isProcessing
 }) => {
@@ -41,15 +39,6 @@ export const Header: React.FC<HeaderProps> = ({
               <span>Pipeline Active</span>
             </div>
           )}
-
-          <button
-            onClick={onOpenSandboxModal}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition"
-            title="Inspect Sandbox Test Website"
-          >
-            <ShieldCheck className="w-4 h-4 text-cyan-400" />
-            <span className="hidden md:inline">Inspect Sandbox Site</span>
-          </button>
 
           <button
             onClick={onOpenSettings}
