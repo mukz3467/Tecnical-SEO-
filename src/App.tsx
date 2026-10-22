@@ -9,7 +9,6 @@ import { GoogleSearchConsoleCard } from './components/GoogleSearchConsoleCard.ts
 import { CrawledPagesTable } from './components/CrawledPagesTable.tsx';
 import { ArtifactsDownloader } from './components/ArtifactsDownloader.tsx';
 import { SettingsModal } from './components/SettingsModal.tsx';
-import { SandboxSitePreviewModal } from './components/SandboxSitePreviewModal.tsx';
 import { AuditJob } from './types.ts';
 import { Clock, History, AlertCircle } from 'lucide-react';
 
@@ -19,7 +18,6 @@ export default function App() {
   const [isStarting, setIsStarting] = useState(false);
   const [isApplyingFix, setIsApplyingFix] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isSandboxModalOpen, setIsSandboxModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'issues' | 'pages' | 'performance' | 'gsc'>('issues');
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
 
@@ -183,7 +181,6 @@ export default function App() {
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-slate-950">
       <Header
         onOpenSettings={() => setIsSettingsOpen(true)}
-        onOpenSandboxModal={() => setIsSandboxModalOpen(true)}
         activeJobId={activeJob?.id}
         isProcessing={isPipelineActive}
       />
@@ -340,13 +337,6 @@ export default function App() {
         onClose={() => setIsSettingsOpen(false)}
       />
 
-      <SandboxSitePreviewModal
-        isOpen={isSandboxModalOpen}
-        onClose={() => setIsSandboxModalOpen(false)}
-        onResetComplete={() => {
-          fetchJobs();
-        }}
-      />
     </div>
   );
 }
