@@ -19,7 +19,7 @@ export const GoogleSearchConsoleCard: React.FC<GoogleSearchConsoleCardProps> = (
             <h3 className="text-sm font-bold text-white flex items-center gap-2">
               <span>Google Search Console & Indexing Workflows</span>
               <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                Official API Compliant
+                Google API Status
               </span>
             </h3>
             <p className="text-xs text-slate-400">
@@ -58,7 +58,7 @@ export const GoogleSearchConsoleCard: React.FC<GoogleSearchConsoleCardProps> = (
         <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800">
           <span className="text-[11px] font-medium text-slate-400 block mb-1">URL Inspection Diagnostics</span>
           <div className="text-sm font-semibold text-white">
-            {status.inspectionSummary.indexedCount} eligible / {status.inspectionSummary.totalInspected} checked
+            {status.inspectionSummary.indexedCount} indexed / {status.inspectionSummary.totalInspected} checked
           </div>
           <p className="text-[11px] text-slate-400 mt-1">
             {status.inspectionSummary.verdict}
