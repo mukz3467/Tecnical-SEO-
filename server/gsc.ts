@@ -23,7 +23,7 @@ function getServiceAccount(): ServiceAccount | undefined {
     if (!parsed.client_email || !parsed.private_key) {
       throw new Error('GOOGLE_SERVICE_ACCOUNT_JSON is missing client_email or private_key.');
     }
-    return parsed;
+    return { ...parsed, private_key: parsed.private_key.replace(/\\n/g, '\n'), token_uri: parsed.token_uri || TOKEN_URL };
   }
 
   const clientEmail = process.env.GOOGLE_SEARCH_CONSOLE_CLIENT_EMAIL;
