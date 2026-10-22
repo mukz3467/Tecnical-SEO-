@@ -33,14 +33,14 @@ export const PerformanceCard: React.FC<PerformanceCardProps> = ({ metrics }) => 
               <span>Core Web Vitals & Loading Diagnostics</span>
             </h3>
             <p className="text-xs text-slate-400">
-              Lighthouse performance scoring & resource optimization bottlenecks
+              Real PageSpeed results when available; no fabricated metrics
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
           <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${getScoreColor(metrics.score)}`}>
-            {metrics.score} / 100
+            {metrics.score !== undefined ? `${metrics.score} / 100` : 'Unavailable'}
           </span>
         </div>
       </div>
@@ -66,7 +66,7 @@ export const PerformanceCard: React.FC<PerformanceCardProps> = ({ metrics }) => 
         <div className="p-3 rounded-xl bg-slate-950 border border-slate-800">
           <span className="text-[11px] font-medium text-slate-400 block mb-0.5">TTFB (Server Latency)</span>
           <div className="text-base font-bold text-white">
-            {metrics.metrics.ttfbMs}ms
+            {metrics.metrics.ttfbMs !== undefined ? `${metrics.metrics.ttfbMs}ms` : '--'}
           </div>
           <span className="text-[10px] text-emerald-400">Target: &lt; 800ms</span>
         </div>
@@ -85,13 +85,13 @@ export const PerformanceCard: React.FC<PerformanceCardProps> = ({ metrics }) => 
         <span className="text-xs font-semibold text-slate-300 block">Identified Resource Bottlenecks</span>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px]">
           <div className="text-slate-400">
-            Missing Image Dimensions: <span className="font-semibold text-amber-400">{metrics.diagnostics.missingDimensionsCount}</span>
+            Missing Image Dimensions: <span className="font-semibold text-amber-400">{metrics.diagnostics.missingDimensionsCount ?? '--'}</span>
           </div>
           <div className="text-slate-400">
-            Uncompressed Responses: <span className="font-semibold text-amber-400">{metrics.diagnostics.uncompressedResponses}</span>
+            Uncompressed Responses: <span className="font-semibold text-amber-400">{metrics.diagnostics.uncompressedResponses ?? '--'}</span>
           </div>
           <div className="text-slate-400">
-            Render-blocking Assets: <span className="font-semibold text-slate-200">{metrics.diagnostics.renderBlockingResources}</span>
+            Render-blocking Assets: <span className="font-semibold text-slate-200">{metrics.diagnostics.renderBlockingResources ?? '--'}</span>
           </div>
         </div>
       </div>
@@ -101,7 +101,7 @@ export const PerformanceCard: React.FC<PerformanceCardProps> = ({ metrics }) => 
         <Info className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
         <div>
           <span className="font-semibold text-slate-300">
-            {metrics.isFieldData ? 'Field CrUX Data: ' : 'Lab Simulation Notice: '}
+            {metrics.isFieldData ? 'Field CrUX Data: ' : metrics.source === 'google_pagespeed_api' ? 'Lighthouse Lab Data: ' : 'Local Crawl Only: '}
           </span>
           <span>{metrics.fieldDataNotice}</span>
         </div>
