@@ -41,29 +41,107 @@ export class JobManager {
     }
   }
 
-  private saveJobsToDisk() {
+  private async persistJobToSharedStorage(job: AuditJob, addToIndex = false): Promise<void> {
+    const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
+    const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+    if (!redisUrl || !redisToken) return;
+
+    const command = async (parts: string[]) => {
+      const response = await fetch(redisUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${redisToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(parts),
+        signal: AbortSignal.timeout(5000)
+      });
+      if (!response.ok) throw new Error(`Shared job storage returned HTTP ${response.status}`);
+      const result = await response.json() as { result?: unknown; error?: string };
+      if (result.error) throw new Error(result.error);
+      return result.result;
+    };
+
+    await command(['SET', `autoindex:job:${job.id}`, JSON.stringify(job)]);
+    if (addToIndex) {
+      await command(['LPUSH', 'autoindex:jobs:index', job.id]);
+      await command(['LTRIM', 'autoindex:jobs:index', '0', '49']);
+    }
+  }
+
+  private saveJobsToDisk(): void {
     try {
       if (!fs.existsSync(JOBS_DIR)) {
         fs.mkdirSync(JOBS_DIR, { recursive: true });
       }
-      const list = Array.from(this.jobs.values()).slice(-50); // keep last 50
+      const list = Array.from(this.jobs.values()).slice(-50);
       fs.writeFileSync(JOBS_FILE, JSON.stringify(list, null, 2), 'utf-8');
     } catch (e) {
       console.warn('Could not save jobs to disk:', e);
     }
   }
 
-  public getJob(id: string): AuditJob | undefined {
+  public async getJob(id: string): Promise<AuditJob | undefined> {
+    const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
+    const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+    if (redisUrl && redisToken) {
+      try {
+        const response = await fetch(redisUrl, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${redisToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(['GET', `autoindex:job:${id}`]),
+          signal: AbortSignal.timeout(5000)
+        });
+        if (response.ok) {
+          const payload = await response.json() as { result?: string | null };
+          if (typeof payload.result === 'string') {
+            const job = JSON.parse(payload.result) as AuditJob;
+            this.jobs.set(id, job);
+            return job;
+          }
+        }
+      } catch (e) {
+        console.warn('Shared job storage read failed:', e);
+      }
+    }
     return this.jobs.get(id);
   }
 
-  public getAllJobs(): AuditJob[] {
+  public async getAllJobs(): Promise<AuditJob[]> {
+    const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
+    const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+    if (redisUrl && redisToken) {
+      try {
+        const response = await fetch(redisUrl, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${redisToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(['LRANGE', 'autoindex:jobs:index', '0', '49']),
+          signal: AbortSignal.timeout(5000)
+        });
+        if (response.ok) {
+          const payload = await response.json() as { result?: string[] };
+          if (Array.isArray(payload.result)) {
+            const jobs = (await Promise.all(payload.result.map(id => this.getJob(id))))
+              .filter((job): job is AuditJob => Boolean(job));
+            return jobs.sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+          }
+        }
+      } catch (e) {
+        console.warn('Shared job history read failed:', e);
+      }
+    }
     return Array.from(this.jobs.values()).sort(
       (a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()
     );
   }
 
-  public createJob(params: {
+  public async createJob(params: {
     targetUrl: string;
     sitemapUrl?: string;
     customUrls?: string[];
@@ -140,6 +218,15 @@ export class JobManager {
 
     this.jobs.set(id, job);
     this.saveJobsToDisk();
+    const sharedConfigured = !!(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
+    if (sharedConfigured) {
+      try {
+        await this.persistJobToSharedStorage(job, true);
+      } catch (e) {
+        console.error('Could not initialize shared job storage:', e);
+        throw new Error('Shared job storage is configured but unavailable. Check the Upstash Redis REST URL and token.');
+      }
+    }
 
     // Keep background work alive after the response in Vercel's function runtime.
     const pipeline = this.runJobPipeline(job).catch(err => {
@@ -282,6 +369,7 @@ export class JobManager {
       job.currentStage = `Failed: ${errorMsg}`;
       addLog('error', `Job aborted due to error: ${errorMsg}`);
       this.saveJobsToDisk();
+      await this.persistJobToSharedStorage(job).catch(e => console.error('Could not persist completed audit job:', e));
     }
   }
 
