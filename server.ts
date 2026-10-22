@@ -7,7 +7,7 @@ import { validateTargetUrl } from './server/security.ts';
 import { RemediationEngine } from './server/remediation.ts';
 
 const app = express();
-const port = 3000;
+const port = Number(process.env.PORT || 3000);
 const isProd = process.env.NODE_ENV === 'production';
 
 app.use(express.json());
