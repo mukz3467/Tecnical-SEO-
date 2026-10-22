@@ -85,9 +85,33 @@ export class GoogleSearchConsoleIntegration {
   ): Promise<GoogleSearchConsoleStatus> {
     const propertyUrl = `sc-domain:${targetDomain.toLowerCase()}`;
     const sitemapTarget = /^https?:\/\//i.test(sitemapUrl) ? sitemapUrl : `https://${targetDomain}/sitemap.xml`;
-    const account = credentials?.clientEmail && credentials?.privateKey
-      ? { client_email: credentials.clientEmail, private_key: credentials.privateKey.replace(/\\n/g, '\n'), token_uri: TOKEN_URL }
-      : getServiceAccount();
+    let account: ServiceAccount | undefined;
+    try {
+      account = credentials?.clientEmail && credentials?.privateKey
+        ? { client_email: credentials.clientEmail, private_key: credentials.privateKey.replace(/\\n/g, '\n'), token_uri: TOKEN_URL }
+        : getServiceAccount();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Invalid Google service-account configuration.';
+      return {
+        connected: false,
+        authMethod: 'unconfigured',
+        propertyUrl,
+        isVerified: false,
+        sitemapSubmitted: false,
+        sitemapSubmissionResult: `NOT SUBMITTED: ${message}`,
+        inspectionSummary: {
+          totalInspected: 0, indexedCount: 0, notIndexedCount: 0,
+          verdict: 'Google credentials invalid',
+          coverageIssues: [message],
+          note: 'No Google API operation was performed because the server-side credentials could not be parsed.'
+        },
+        indexingApiStatus: {
+          supported: false,
+          notice: 'No Indexing API notification was sent.',
+          eligiblePages: []
+        }
+      };
+    }
     const coverageIssues: string[] = [];
     const eligiblePages = crawledPages
       .filter(p => p.structuredDataTypes.includes('JobPosting') || p.structuredDataTypes.includes('BroadcastEvent'))
@@ -176,10 +200,10 @@ export class GoogleSearchConsoleIntegration {
         ? 'Counts come only from successful Google URL Inspection API responses. URLs that could not be inspected are excluded. Sitemap submission does not guarantee indexing.'
         : 'Sitemap submission was attempted, but URL Inspection authentication failed. Local crawl results are not Google indexing status.';
       return {
-        connected: sitemapSubmitted || !!inspectionToken,
+        connected: sitemapSubmitted || totalInspected > 0,
         authMethod: 'service_account',
         propertyUrl,
-        isVerified: sitemapSubmitted || !!inspectionToken,
+        isVerified: sitemapSubmitted || totalInspected > 0,
         sitemapSubmitted,
         sitemapSubmissionTime: sitemapSubmitted ? new Date().toISOString() : undefined,
         sitemapSubmissionResult,
