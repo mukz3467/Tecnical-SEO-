@@ -67,8 +67,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
               <div>GOOGLE_SEARCH_CONSOLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n..."</div>
               <div className="pt-1"># Google PageSpeed Insights API Key (Lighthouse Lab & CrUX Real-User Field Data)</div>
               <div>PAGESPEED_API_KEY="AIzaSy..."</div>
-              <div className="pt-1"># GitHub Token for Direct Pull Requests / File Patches</div>
-              <div>GITHUB_TOKEN="ghp_..."</div>
             </div>
           </div>
 
@@ -76,7 +74,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose })
           <div className="space-y-2">
             <h3 className="text-sm font-semibold text-white">Security & SSRF Hardening</h3>
             <p className="text-slate-400 leading-relaxed">
-              Our backend employs recursive DNS resolution checks to prevent Server-Side Request Forgery (SSRF). Requests to <code>localhost</code>, private RFC 1918 IPv4 ranges (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16), IPv6 loopback, and cloud metadata (169.254.169.254) are rejected at the socket layer.
+              The crawler rejects private/internal hostnames and non-public IP ranges before requests and revalidates redirects. This is defense-in-depth, not a replacement for network egress controls or DNS-pinning at the transport layer.
             </p>
           </div>
         </div>
