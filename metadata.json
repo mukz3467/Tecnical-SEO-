@@ -1,0 +1,6 @@
+{
+  "name": "AutoIndex AI — Autonomous Technical SEO & Indexing Platform",
+  "description": "Autonomous technical SEO auditing, crawling diagnostics, automated authorized remediation, sitemap generation, and Google Search Console indexing workflows.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
