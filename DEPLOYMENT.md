@@ -32,7 +32,8 @@ Set `NODE_ENV=production`. The app serves the built frontend from `dist` and the
 4. In the hosting provider's server-side environment settings, configure either:
    - `GOOGLE_SERVICE_ACCOUNT_JSON` with the complete service-account JSON, or
    - `GOOGLE_SEARCH_CONSOLE_CLIENT_EMAIL` and `GOOGLE_SEARCH_CONSOLE_PRIVATE_KEY`.
-5. Restart/redeploy the service and inspect `/api/status`.
+5. If you use a URL-prefix property rather than a domain property, set `GOOGLE_SEARCH_CONSOLE_PROPERTY_URL` to the exact property string shown in Search Console (for example, `https://www.example.com/` or `sc-domain:example.com`).
+6. Restart/redeploy the service and inspect `/api/status`.
 
 Never paste service-account JSON/private keys into public GitHub files, client-side code, or chat. Do not commit `.env` files.
 
