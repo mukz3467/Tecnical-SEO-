@@ -56,7 +56,14 @@ export default function App() {
           if (!res.ok) {
             pollFailuresRef.current += 1;
             if (res.status === 404) {
-              setErrorBanner('Audit progress is unavailable from this server (job not found). The deployment is not sharing job state between requests. Please refresh and start a new audit; persistent shared storage is required to prevent this.');
+              const lostMessage = 'Audit progress was lost between server requests. This deployment needs shared persistent job storage; this run cannot safely continue.';
+              setErrorBanner(lostMessage);
+              setActiveJob(prev => prev && prev.id === activeJob.id
+                ? { ...prev, status: 'failed', error: lostMessage, currentStage: 'Stopped: server could not retrieve this audit job.' }
+                : prev);
+              setJobs(prev => prev.map(j => j.id === activeJob.id
+                ? { ...j, status: 'failed', error: lostMessage, currentStage: 'Stopped: server could not retrieve this audit job.' }
+                : j));
               return;
             }
             if (pollFailuresRef.current >= 3) {
