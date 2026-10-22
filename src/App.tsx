@@ -10,13 +10,12 @@ import { CrawledPagesTable } from './components/CrawledPagesTable.tsx';
 import { ArtifactsDownloader } from './components/ArtifactsDownloader.tsx';
 import { SettingsModal } from './components/SettingsModal.tsx';
 import { AuditJob } from './types.ts';
-import { Clock, History, AlertCircle } from 'lucide-react';
+import { History, AlertCircle } from 'lucide-react';
 
 export default function App() {
   const [jobs, setJobs] = useState<AuditJob[]>([]);
   const [activeJob, setActiveJob] = useState<AuditJob | null>(null);
   const [isStarting, setIsStarting] = useState(false);
-  const [isApplyingFix, setIsApplyingFix] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'issues' | 'pages' | 'performance' | 'gsc'>('issues');
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
@@ -107,71 +106,6 @@ export default function App() {
       setErrorBanner(errorMsg);
     } finally {
       setIsStarting(false);
-    }
-  };
-
-  const handleApplyFix = async (issueId: string) => {
-    if (!activeJob) return;
-    setIsApplyingFix(true);
-    try {
-      const res = await fetch(`/api/jobs/${activeJob.id}/apply-fix`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ issueId })
-      });
-      if (res.ok) {
-        // Refresh job
-        const jobRes = await fetch(`/api/jobs/${activeJob.id}`);
-        if (jobRes.ok) {
-          const updated = await jobRes.json();
-          setActiveJob(updated);
-          setJobs(prev => prev.map(j => (j.id === updated.id ? updated : j)));
-        }
-      }
-    } finally {
-      setIsApplyingFix(false);
-    }
-  };
-
-  const handleRollbackFix = async (issueId: string) => {
-    if (!activeJob) return;
-    setIsApplyingFix(true);
-    try {
-      const res = await fetch(`/api/jobs/${activeJob.id}/rollback-fix`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ issueId })
-      });
-      if (res.ok) {
-        const jobRes = await fetch(`/api/jobs/${activeJob.id}`);
-        if (jobRes.ok) {
-          const updated = await jobRes.json();
-          setActiveJob(updated);
-          setJobs(prev => prev.map(j => (j.id === updated.id ? updated : j)));
-        }
-      }
-    } finally {
-      setIsApplyingFix(false);
-    }
-  };
-
-  const handleApplyAllSafeFixes = async () => {
-    if (!activeJob) return;
-    setIsApplyingFix(true);
-    try {
-      const res = await fetch(`/api/jobs/${activeJob.id}/apply-all-safe-fixes`, {
-        method: 'POST'
-      });
-      if (res.ok) {
-        const jobRes = await fetch(`/api/jobs/${activeJob.id}`);
-        if (jobRes.ok) {
-          const updated = await jobRes.json();
-          setActiveJob(updated);
-          setJobs(prev => prev.map(j => (j.id === updated.id ? updated : j)));
-        }
-      }
-    } finally {
-      setIsApplyingFix(false);
     }
   };
 
@@ -295,10 +229,6 @@ export default function App() {
             {activeTab === 'issues' && (
               <IssuesTable
                 issues={activeJob.issues}
-                onApplyFix={handleApplyFix}
-                onRollbackFix={handleRollbackFix}
-                onApplyAllSafeFixes={handleApplyAllSafeFixes}
-                isApplying={isApplyingFix}
               />
             )}
 
