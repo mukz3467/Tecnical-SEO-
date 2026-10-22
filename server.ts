@@ -186,14 +186,14 @@ app.get('/api/jobs/:id/download/robots', (req, res) => {
   res.send(robots);
 });
 
-app.get('/api/jobs/:id/download/patch', (req, res) => {
+app.get('/api/jobs/:id/download/remediation-report', (req, res) => {
   const job = jobManager.getJob(req.params.id);
   if (!job) return res.status(404).send('Job not found');
 
-  const patch = job.generatedPatchesBundle || RemediationEngine.generateUnifiedPatch(job.issues, job.targetDomain);
-  res.setHeader('Content-Type', 'text/plain');
-  res.setHeader('Content-Disposition', `attachment; filename="remediation-${job.targetDomain}.patch"`);
-  res.send(patch);
+  const report = job.generatedPatchesBundle || RemediationEngine.generateRemediationReport(job.issues, job.targetDomain);
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="remediation-report-${job.targetDomain}.txt"`);
+  res.send(report);
 });
 
 // -------------------------------------------------------------
