@@ -3,7 +3,7 @@ import dns from 'node:dns/promises';
 import net, { isIP } from 'node:net';
 
 function ipv4ToNumber(ip: string): number | undefined {
-  if (net.isIPv4(ip) !== 1) return undefined;
+  if (!net.isIPv4(ip)) return undefined;
   return ip.split('.').reduce((n, part) => ((n * 256) + Number(part)) >>> 0, 0);
 }
 
