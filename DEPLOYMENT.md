@@ -41,3 +41,18 @@ Set the server-side `PAGESPEED_API_KEY` to enable the Google PageSpeed Insights 
 ## Remediation limits
 
 The app generates a structurally validated sitemap, a conservative robots.txt suggestion, and an evidence-led remediation **report** containing proposed snippets. It does not create an executable `.patch`, edit third-party live files, or claim that a fix was applied. A real write integration would need explicit authorization, source access, validation, and rollback support.
+
+
+## Shared audit-job storage (Vercel serverless)
+
+Vercel function instances do not share memory or `/tmp`. To keep audit progress available between requests, configure a Redis-compatible REST store. The app supports Upstash Redis REST without an extra npm dependency.
+
+1. Create an Upstash account and create a Redis database on its free plan: https://console.upstash.com/
+2. Open the database's **REST API** section and copy the REST URL and REST token.
+3. In Vercel, open the `tecnical-seo` project → **Settings → Environment Variables**.
+4. Add these variables for **Production** (and Preview if you test previews):
+   - `UPSTASH_REDIS_REST_URL` = the Upstash REST URL
+   - `UPSTASH_REDIS_REST_TOKEN` = the Upstash REST token (keep it secret; never put it in frontend code or commit it)
+5. Redeploy the latest production deployment, then run a new audit.
+
+The integration stores job snapshots under `autoindex:job:<id>` and maintains a capped 50-job history index. Without both environment variables, local development continues to use local storage and Vercel cannot guarantee shared job retrieval. Upstash's free plan has usage limits; this is intended to work without a paid plan while usage remains within those limits. Sitemap submission and crawl completion still depend on target-site access, serverless runtime limits, and Google API configuration.
