@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import { waitUntil } from '@vercel/functions';
 import fs from 'fs';
 import path from 'path';
-import { AuditJob, SeoIssue } from './types.ts';
+import { AuditJob } from './types.ts';
 import { TechnicalSeoCrawler } from './crawler.ts';
 import { TechnicalSeoAuditor } from './audit.ts';
 import { analyzePerformance } from './pagespeed.ts';
