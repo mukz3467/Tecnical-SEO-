@@ -83,47 +83,6 @@ app.get('/api/jobs/:id', (req, res) => {
 });
 
 // -------------------------------------------------------------
-// 4. REMEDIATION & ROLLBACK ACTIONS
-// -------------------------------------------------------------
-app.post('/api/jobs/:id/apply-fix', async (req, res) => {
-  const { issueId } = req.body;
-  if (!issueId) {
-    return res.status(400).json({ error: 'issueId is required' });
-  }
-
-  const result = await jobManager.applySpecificFix(req.params.id, issueId);
-  if (!result.success) {
-    return res.status(400).json(result);
-  }
-  res.json(result);
-});
-
-app.post('/api/jobs/:id/rollback-fix', (req, res) => {
-  const { issueId } = req.body;
-  if (!issueId) {
-    return res.status(400).json({ error: 'issueId is required' });
-  }
-
-  const result = jobManager.rollbackSpecificFix(req.params.id, issueId);
-  if (!result.success) {
-    return res.status(400).json(result);
-  }
-  res.json(result);
-});
-
-app.post('/api/jobs/:id/apply-all-safe-fixes', async (req, res) => {
-  const job = jobManager.getJob(req.params.id);
-  if (!job) {
-    return res.status(404).json({ error: 'Job not found' });
-  }
-
-  return res.status(409).json({
-    success: false,
-    message: 'Patch-only mode: no live website files are modified by this deployment. Download the remediation report and apply reviewed changes through an authorized source-control or hosting integration.'
-  });
-});
-
-// -------------------------------------------------------------
 // 5. DOWNLOADS & EXPORTS
 // -------------------------------------------------------------
 app.get('/api/jobs/:id/export/json', (req, res) => {
