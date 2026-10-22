@@ -69,7 +69,7 @@ export class JobManager {
     }
   }
 
-  private saveJobsToDisk(): void {
+  private saveJobsToDisk(jobToPersist?: AuditJob): void {
     try {
       if (!fs.existsSync(JOBS_DIR)) {
         fs.mkdirSync(JOBS_DIR, { recursive: true });
@@ -78,6 +78,9 @@ export class JobManager {
       fs.writeFileSync(JOBS_FILE, JSON.stringify(list, null, 2), 'utf-8');
     } catch (e) {
       console.warn('Could not save jobs to disk:', e);
+    }
+    if (jobToPersist && process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
+      void this.persistJobToSharedStorage(jobToPersist).catch(e => console.error('Could not persist audit job:', e));
     }
   }
 
@@ -217,7 +220,7 @@ export class JobManager {
     };
 
     this.jobs.set(id, job);
-    this.saveJobsToDisk();
+    this.saveJobsToDisk(job);
     const sharedConfigured = !!(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
     if (sharedConfigured) {
       try {
@@ -237,7 +240,7 @@ export class JobManager {
         level: 'error',
         message: `Pipeline halted with error: ${job.error}`
       });
-      this.saveJobsToDisk();
+      this.saveJobsToDisk(job);
     });
 
     if (process.env.VERCEL === '1') {
@@ -277,10 +280,10 @@ export class JobManager {
         // Persist each reported stage, not just the final result. This helps recover
         // the latest known progress after a warm-instance restart (shared storage is
         // still required for consistent state across independent serverless instances).
-        this.saveJobsToDisk();
+        this.saveJobsToDisk(job);
         if (progress % 10 === 0) {
           addLog('info', message);
-          this.saveJobsToDisk();
+          this.saveJobsToDisk(job);
         }
       });
 
@@ -361,14 +364,14 @@ export class JobManager {
 
       const proposedCount = job.issues.filter(issue => issue.proposedFix).length;
       addLog('success', `Audit finalized: ${job.summary.criticalCount} Critical, ${job.summary.highCount} High, ${job.summary.mediumCount} Medium issues. ${proposedCount} proposed remediation snippets prepared; no live-site files were changed.`);
-      this.saveJobsToDisk();
+      this.saveJobsToDisk(job);
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       job.status = 'failed';
       job.error = errorMsg;
       job.currentStage = `Failed: ${errorMsg}`;
       addLog('error', `Job aborted due to error: ${errorMsg}`);
-      this.saveJobsToDisk();
+      this.saveJobsToDisk(job);
       await this.persistJobToSharedStorage(job).catch(e => console.error('Could not persist completed audit job:', e));
     }
   }
