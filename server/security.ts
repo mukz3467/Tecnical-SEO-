@@ -87,7 +87,17 @@ export async function validateTargetUrl(rawUrl: string, allowSandbox = true): Pr
     if (isPrivateIp(hostname)) return { isSafe: false, reason: `Access to private or non-public IP (${hostname}) is blocked.` };
   } else {
     try {
-      const records = await dns.lookup(hostname, { all: true, verbatim: true });
+      // Bound DNS resolution separately: fetch's AbortController does not cover dns.lookup().
+      // This prevents the crawler and URL pre-check from waiting indefinitely before HTTP begins.
+      let dnsTimer: ReturnType<typeof setTimeout> | undefined;
+      const records = await Promise.race([
+        dns.lookup(hostname, { all: true, verbatim: true }),
+        new Promise<never>((_, reject) => {
+          dnsTimer = setTimeout(() => reject(new Error('DNS lookup timed out after 3000ms')), 3000);
+        })
+      ]).finally(() => {
+        if (dnsTimer) clearTimeout(dnsTimer);
+      });
       if (!records.length || records.some(record => isPrivateIp(record.address))) {
         return { isSafe: false, reason: 'The hostname resolves to a private, reserved, or non-public IP address.' };
       }
