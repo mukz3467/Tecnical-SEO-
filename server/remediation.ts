@@ -6,47 +6,40 @@ export class RemediationEngine {
    * Generates a fully validated, production-ready XML Sitemap containing only 200 OK canonical URLs.
    */
   public static generateCleanSitemap(crawledPages: CrawledPage[], domain: string): string {
-    const validPages = crawledPages.filter(p => p.status === 200 && !p.isNoindex);
-    const today = new Date().toISOString().split('T')[0];
+    const host = domain.toLowerCase();
+    const urls = new Set<string>();
+    for (const page of crawledPages) {
+      if (page.status !== 200 || page.isNoindex) continue;
+      try {
+        const source = new URL(page.url);
+        const canonical = new URL(page.canonicalUrl || page.url);
+        if (source.hostname.toLowerCase() !== host || canonical.hostname.toLowerCase() !== host) continue;
+        urls.add(canonical.href);
+      } catch {
+        // Ignore malformed URLs rather than emitting invalid sitemap entries.
+      }
+    }
 
     const xmlLines = [
       '<?xml version="1.0" encoding="UTF-8"?>',
       '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
-      ...validPages.map(page => {
-        const loc = page.canonicalUrl || page.url;
-        // Priority calculation
-        const isRoot = new URL(loc).pathname === '/' || new URL(loc).pathname === '';
-        const priority = isRoot ? '1.0' : '0.8';
-        return `  <url>
-    <loc>${this.escapeXml(loc)}</loc>
-    <lastmod>${today}</lastmod>
-    <changefreq>${isRoot ? 'daily' : 'weekly'}</changefreq>
-    <priority>${priority}</priority>
-  </url>`;
-      }),
+      ...Array.from(urls).sort().map(url => `  <url>\n    <loc>${this.escapeXml(url)}</loc>\n  </url>`),
       '</urlset>'
     ];
-
     return xmlLines.join('\n');
   }
 
   /**
-   * Generates a recommended, standardized robots.txt
+   * Creates a conservative robots.txt suggestion without assuming private paths or filter parameters.
    */
   public static generateOptimizedRobotsTxt(domain: string, sitemapUrl?: string): string {
     const sitemapTarget = sitemapUrl || `https://${domain}/sitemap.xml`;
-    return `# AutoIndex AI Standard Optimized robots.txt
-# Generated for: ${domain}
-# Crawl-rate and crawler directives optimized for Googlebot & compliant search engines
+    return `# Suggested baseline robots.txt for ${domain}
+# Review crawl rules before publishing; no site files are changed by this tool.
 
 User-agent: *
 Allow: /
-Disallow: /admin/
-Disallow: /private/
-Disallow: /*?*sort=
-Disallow: /*?*filter=
 
-# XML Sitemap Location
 Sitemap: ${sitemapTarget}
 `;
   }
