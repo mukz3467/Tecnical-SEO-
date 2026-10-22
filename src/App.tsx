@@ -21,6 +21,7 @@ export default function App() {
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
 
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const pollFailuresRef = useRef(0);
 
   // Initial load of jobs list
   const fetchJobs = async () => {
@@ -52,14 +53,28 @@ export default function App() {
       pollingRef.current = setInterval(async () => {
         try {
           const res = await fetch(`/api/jobs/${activeJob.id}`);
-          if (res.ok) {
-            const updated: AuditJob = await res.json();
-            setActiveJob(updated);
-            // also update jobs list
-            setJobs(prev => prev.map(j => (j.id === updated.id ? updated : j)));
+          if (!res.ok) {
+            pollFailuresRef.current += 1;
+            if (res.status === 404) {
+              setErrorBanner('Audit progress is unavailable from this server (job not found). The deployment is not sharing job state between requests. Please refresh and start a new audit; persistent shared storage is required to prevent this.');
+              return;
+            }
+            if (pollFailuresRef.current >= 3) {
+              setErrorBanner(`Unable to read audit progress (HTTP ${res.status}). The crawl may still be running, but the dashboard cannot confirm its status.`);
+            }
+            return;
           }
+
+          pollFailuresRef.current = 0;
+          const updated: AuditJob = await res.json();
+          setActiveJob(updated);
+          // also update jobs list
+          setJobs(prev => prev.map(j => (j.id === updated.id ? updated : j)));
         } catch {
-          // ignore
+          pollFailuresRef.current += 1;
+          if (pollFailuresRef.current >= 3) {
+            setErrorBanner('Network error while checking audit progress. Check your connection and reload the page.');
+          }
         }
       }, 1200);
     } else {
