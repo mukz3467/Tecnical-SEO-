@@ -32,12 +32,36 @@ export class TechnicalSeoCrawler {
     onProgress?.(5, 'crawling', 'Inspecting robots.txt and sitemap directives...');
     
     // 1. Fetch & Parse robots.txt
-    const robotsTxtInfo = await this.auditRobotsTxt();
+    const robotsTxtInfo = await this.withTimeout(
+      this.auditRobotsTxt(),
+      12000,
+      {
+        url: `${this.options.seedUrl.replace(/\/$/, '')}/robots.txt`,
+        exists: false,
+        content: '',
+        rules: [],
+        sitemaps: [],
+        errors: ['robots.txt audit exceeded the 12-second stage limit; continuing crawl safely.'],
+        warnings: []
+      } satisfies RobotsTxtInfo
+    );
     
     // 2. Discover & Parse Sitemap
     onProgress?.(15, 'crawling', 'Validating XML sitemaps and nested indexes...');
     const sitemapTarget = this.options.sitemapUrl || (robotsTxtInfo.sitemaps.length > 0 ? robotsTxtInfo.sitemaps[0] : `${this.options.seedUrl.replace(/\/$/, '')}/sitemap.xml`);
-    const sitemapInfo = await this.auditSitemap(sitemapTarget);
+    const sitemapInfo = await this.withTimeout(
+      this.auditSitemap(sitemapTarget),
+      15000,
+      {
+        url: sitemapTarget,
+        exists: false,
+        type: 'error',
+        urlCount: 0,
+        errors: ['Sitemap audit exceeded the 15-second stage limit; continuing with discovered links.'],
+        warnings: [],
+        discoveredUrls: []
+      } satisfies SitemapInfo
+    );
 
     // Populate queue with seed URL
     this.enqueue(this.options.seedUrl, 0);
@@ -99,6 +123,20 @@ export class TechnicalSeoCrawler {
       robotsTxtInfo,
       orphanPages
     };
+  }
+
+  private async withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<T> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        promise,
+        new Promise<T>(resolve => {
+          timer = setTimeout(() => resolve(fallback), timeoutMs);
+        })
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   }
 
   private enqueue(url: string, depth: number) {
