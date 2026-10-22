@@ -33,7 +33,7 @@ export const GoogleSearchConsoleCard: React.FC<GoogleSearchConsoleCardProps> = (
             status.isVerified ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
           }`}>
             <CheckCircle2 className="w-3.5 h-3.5" />
-            {status.connected ? 'Live GSC Connected' : status.authMethod === 'simulation_sandbox' ? 'Sandbox Mode' : 'Not Connected'}
+            {status.connected ? 'Live GSC Connected' : 'Not Connected'}
           </span>
         </div>
       </div>
