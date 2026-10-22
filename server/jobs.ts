@@ -224,13 +224,13 @@ export class JobManager {
       // Stage 4: Validation
       job.status = 'validating';
       job.progress = 85;
-      job.currentStage = 'Validating modified files & rerunning integrity checks...';
-      addLog('info', 'Validating updated sitemaps, robots.txt, and HTML tag injection...');
+      job.currentStage = 'Validating generated sitemap and preparing the evidence-led remediation report...';
+      addLog('info', 'Checking generated sitemap structure and preparing robots.txt/report artifacts. No live website files are modified.');
 
       // Generate Clean Artifacts
       job.generatedSitemapXml = RemediationEngine.generateCleanSitemap(job.crawledPages, job.targetDomain);
-      job.generatedRobotsTxt = RemediationEngine.generateOptimizedRobotsTxt(job.targetDomain, job.sitemapUrl);
-      job.generatedPatchesBundle = RemediationEngine.generateRemediationReport(job.issues, job.targetDomain);
+      job.generatedRobotsTxt = RemediationEngine.generateOptimizedRobotsTxt(job.targetDomain, job.sitemapUrl || `${new URL(job.targetUrl).origin}/sitemap.xml`);
+      job.generatedRemediationReport = RemediationEngine.generateRemediationReport(job.issues, job.targetDomain);
 
       // Stage 5: Google Search Console Submission
       job.status = 'submitting_sitemap';
@@ -240,7 +240,7 @@ export class JobManager {
 
       job.searchConsoleStatus = await GoogleSearchConsoleIntegration.executeWorkflow(
         job.targetDomain,
-        job.sitemapUrl || `https://${job.targetDomain}/sitemap.xml`,
+        job.sitemapUrl || `${new URL(job.targetUrl).origin}/sitemap.xml`,
         job.crawledPages,
         job.sitemapInfo
       );
@@ -253,13 +253,14 @@ export class JobManager {
       // Stage 6: Completion & Stats
       job.status = 'completed';
       job.progress = 100;
-      job.currentStage = 'Technical SEO audit & automated remediation complete!';
+      job.currentStage = 'Technical SEO audit complete; proposed changes are ready for review.';
       job.completedAt = new Date().toISOString();
 
       // Compute statistics
       this.refreshSummary(job);
 
-      addLog('success', `Audit finalized: ${job.summary.criticalCount} Critical, ${job.summary.highCount} High, ${job.summary.mediumCount} Medium issues. ${job.summary.fixesAppliedCount} fixes applied & validated.`);
+      const proposedCount = job.issues.filter(issue => issue.proposedFix).length;
+      addLog('success', `Audit finalized: ${job.summary.criticalCount} Critical, ${job.summary.highCount} High, ${job.summary.mediumCount} Medium issues. ${proposedCount} proposed remediation snippets prepared; no live-site files were changed.`);
       this.saveJobsToDisk();
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : String(err);
