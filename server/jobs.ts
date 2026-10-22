@@ -83,7 +83,7 @@ export class JobManager {
     }
 
     const domain = urlObj.hostname;
-    const isSandbox = domain === 'sandbox.local' || domain === 'autoindex.sandbox' || urlObj.pathname.startsWith('/api/sandbox-site');
+    const isSandbox = domain === 'sandbox.local' || domain === 'autoindex.sandbox';
 
     const job: AuditJob = {
       id,
