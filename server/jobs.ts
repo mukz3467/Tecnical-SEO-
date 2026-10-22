@@ -211,7 +211,9 @@ export class JobManager {
       job.progress = 65;
       job.currentStage = 'Analyzing Core Web Vitals (LCP, INP, CLS) and loading bottlenecks...';
       job.performanceMetrics = await analyzePerformance(job.targetUrl, job.crawledPages);
-      addLog('info', `Performance analysis finished. Score: ${job.performanceMetrics.score}/100.`);
+      addLog('info', job.performanceMetrics.score !== undefined
+        ? `Real PageSpeed performance score: ${job.performanceMetrics.score}/100 (source: ${job.performanceMetrics.source}).`
+        : `No PageSpeed score available. ${job.performanceMetrics.fieldDataNotice}`);
 
       // Stage 3: Automatic Fixes & Remediation
       if (job.autoFixEnabled) {
