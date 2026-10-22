@@ -83,7 +83,7 @@ export class JobManager {
     }
 
     const domain = urlObj.hostname;
-    const isSandbox = domain === 'sandbox.local' || domain === 'autoindex.sandbox';
+    const isSandbox = false;
 
     const job: AuditJob = {
       id,
@@ -92,7 +92,7 @@ export class JobManager {
       sitemapUrl: params.sitemapUrl,
       customUrls: params.customUrls,
       autoFixEnabled: params.autoFixEnabled ?? true,
-      connectedSourceMode: params.connectedSourceMode || (isSandbox ? 'sandbox_workspace' : 'download_patch_only'),
+      connectedSourceMode: 'download_patch_only',
       status: 'queued',
       progress: 0,
       currentStage: 'Initializing crawler pipeline and checking robots.txt rules...',
@@ -215,21 +215,13 @@ export class JobManager {
         ? `Real PageSpeed performance score: ${job.performanceMetrics.score}/100 (source: ${job.performanceMetrics.source}).`
         : `No PageSpeed score available. ${job.performanceMetrics.fieldDataNotice}`);
 
-      // Stage 3: Automatic Fixes & Remediation
+      // Stage 3: Remediation planning only. This deployment has no authorized live-site write connector.
       if (job.autoFixEnabled) {
         job.status = 'remediating';
         job.progress = 75;
-        job.currentStage = 'Applying authorized low-risk technical fixes...';
-        addLog('info', 'Starting authorized automatic remediation on safe low-risk issues...');
-
-        for (const issue of job.issues) {
-          if (issue.proposedFix?.isSafeToAutoApply && issue.fixStatus === 'available') {
-            const fixRes = await RemediationEngine.applyFix(issue, job, true);
-            if (fixRes.success) {
-              addLog('success', `Applied fix [${issue.id}]: ${issue.proposedFix.summary}`);
-            }
-          }
-        }
+        job.currentStage = 'Preparing candidate remediation snippets for review...';
+        const candidates = job.issues.filter(issue => issue.proposedFix && issue.fixStatus === 'available').length;
+        addLog('info', `Prepared ${candidates} candidate remediation suggestions. No live website files were changed.`);
       }
 
       // Stage 4: Validation
@@ -323,12 +315,10 @@ export class JobManager {
     const issue = job.issues.find(i => i.id === issueId);
     if (!issue) return { success: false, message: 'Issue not found in job.' };
 
-    const result = await RemediationEngine.applyFix(issue, job, true);
-    if (result.success) {
-      this.refreshSummary(job);
-      this.saveJobsToDisk();
-    }
-    return result;
+    return {
+      success: false,
+      message: 'This deployment is in patch-only mode. The live website was not modified. Download the remediation report, review the proposed code, and apply it through your authorized source-control or hosting workflow.'
+    };
   }
 
   public rollbackSpecificFix(jobId: string, issueId: string): { success: boolean; message: string } {
@@ -338,11 +328,9 @@ export class JobManager {
     const issue = job.issues.find(i => i.id === issueId);
     if (!issue) return { success: false, message: 'Issue not found in job.' };
 
-    const result = RemediationEngine.rollbackFix(issue, job);
-    if (result.success) {
-      this.refreshSummary(job);
-      this.saveJobsToDisk();
-    }
-    return result;
+    return {
+      success: false,
+      message: 'Rollback is unavailable because this app did not modify live website files. Revert the change in your authorized source-control or hosting workflow.'
+    };
   }
 }
