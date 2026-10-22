@@ -139,31 +139,30 @@ Sitemap: ${sitemapTarget}
               $('head').prepend(`\n  <meta name="viewport" content="width=device-width, initial-scale=1.0" />`);
             } else if (issue.title.includes('Language')) {
               $('html').attr('lang', 'en');
-            } else if (issue.title.includes('Title')) {
-              if ($('title').length === 0) {
-                $('head').prepend(`\n  <title>${job.targetDomain} - Enterprise Cloud Platform</title>`);
-              }
-            } else if (issue.title.includes('Meta Description')) {
-              $('meta[name="description"]').remove();
-              $('head').append(`\n  <meta name="description" content="Discover key features, infrastructure automation, and enterprise solutions on ${job.targetDomain}." />`);
+            } else if (issue.title.includes('Title') || issue.title.includes('Meta Description')) {
+              // Do not invent business-specific SEO copy from a domain name.
+              // Leave the live/sandbox HTML unchanged until a human supplies accurate content.
+              issue.fixStatus = 'available';
+              return {
+                success: false,
+                message: 'Human review required: provide an accurate page-specific title or meta description before applying this fix.'
+              };
             }
           } else if (issue.fixType === 'html_image') {
             $('img').each((_, el) => {
-              if (!$(el).attr('alt')) {
-                $(el).attr('alt', 'Illustration of cloud infrastructure and service capabilities');
-              }
-              if (!$(el).attr('width')) {
-                $(el).attr('width', '800');
-              }
-              if (!$(el).attr('height')) {
-                $(el).attr('height', '450');
-              }
+              // Alt text and intrinsic dimensions are content-specific; never invent them.
+              // Only add lazy loading where absent. Dimensions must come from the actual asset.
               if (!$(el).attr('loading')) {
                 $(el).attr('loading', 'lazy');
               }
             });
           } else if (issue.fixType === 'jsonld') {
-            $('script[type="application/ld+json"]').remove();
+            // Preserve existing structured data; deleting it can remove valid business-specific schema.
+            // Only add generic WebSite schema when no JSON-LD exists and the domain is a suitable canonical host.
+            if ($('script[type="application/ld+json"]').length > 0) {
+              issue.fixStatus = 'available';
+              return { success: false, message: 'Human review required: existing JSON-LD was preserved to avoid overwriting valid structured data.' };
+            }
             const validJsonLd = {
               '@context': 'https://schema.org',
               '@type': 'WebSite',
