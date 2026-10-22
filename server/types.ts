@@ -206,5 +206,5 @@ export interface AuditJob {
   // Generated Artifacts
   generatedSitemapXml?: string;
   generatedRobotsTxt?: string;
-  generatedPatchesBundle?: string;
+  generatedRemediationReport?: string;
 }
