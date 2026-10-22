@@ -313,29 +313,5 @@ export class JobManager {
     };
   }
 
-  public async applySpecificFix(jobId: string, issueId: string): Promise<{ success: boolean; message: string }> {
-    const job = this.jobs.get(jobId);
-    if (!job) return { success: false, message: 'Job not found.' };
 
-    const issue = job.issues.find(i => i.id === issueId);
-    if (!issue) return { success: false, message: 'Issue not found in job.' };
-
-    return {
-      success: false,
-      message: 'This deployment is in patch-only mode. The live website was not modified. Download the remediation report, review the proposed code, and apply it through your authorized source-control or hosting workflow.'
-    };
-  }
-
-  public rollbackSpecificFix(jobId: string, issueId: string): { success: boolean; message: string } {
-    const job = this.jobs.get(jobId);
-    if (!job) return { success: false, message: 'Job not found.' };
-
-    const issue = job.issues.find(i => i.id === issueId);
-    if (!issue) return { success: false, message: 'Issue not found in job.' };
-
-    return {
-      success: false,
-      message: 'Rollback is unavailable because this app did not modify live website files. Revert the change in your authorized source-control or hosting workflow.'
-    };
-  }
 }
