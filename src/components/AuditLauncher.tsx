@@ -17,7 +17,6 @@ export const AuditLauncher: React.FC<AuditLauncherProps> = ({ onStartAudit, isLo
   const [targetUrl, setTargetUrl] = useState('');
   const [sitemapUrl, setSitemapUrl] = useState('');
   const [customUrlsRaw, setCustomUrlsRaw] = useState('');
-  const [prepareFixes, setPrepareFixes] = useState(true);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [validationError, setValidationError] = useState('');
 
@@ -41,7 +40,7 @@ export const AuditLauncher: React.FC<AuditLauncherProps> = ({ onStartAudit, isLo
       targetUrl: parsed.toString(),
       sitemapUrl: sitemapUrl.trim() || undefined,
       customUrls: customUrls.length ? customUrls : undefined,
-      autoFixEnabled: prepareFixes,
+      autoFixEnabled: true,
       connectedSourceMode: 'download_patch_only'
     });
   };
@@ -84,15 +83,9 @@ export const AuditLauncher: React.FC<AuditLauncherProps> = ({ onStartAudit, isLo
             <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-300"><FileCode2 className="w-3.5 h-3.5 text-cyan-400" /> Remediation output</div>
             <p className="text-[11px] text-slate-400 mt-2">Creates a downloadable patch/artifact for review. This app does not write to a third-party website or deploy changes without a separately connected and authorized source integration.</p>
           </div>
-          <div className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl flex items-center justify-between gap-3">
-            <div>
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-300"><ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Prepare remediation suggestions</div>
-              <p className="text-[11px] text-slate-400 mt-1">Build candidate fixes for eligible findings; never claim live changes were applied.</p>
-            </div>
-            <label className="relative inline-flex items-center cursor-pointer shrink-0">
-              <input type="checkbox" checked={prepareFixes} onChange={e => setPrepareFixes(e.target.checked)} className="sr-only peer" />
-              <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full peer-checked:bg-emerald-500"></div>
-            </label>
+          <div className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-300"><ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Remediation mode: review-only</div>
+            <p className="text-[11px] text-slate-400 mt-2">The audit prepares candidate snippets and an evidence report. Live source edits, auto-deploy, and rollback are not enabled in this deployment.</p>
           </div>
         </div>
 
