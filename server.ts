@@ -190,7 +190,7 @@ app.get('/api/jobs/:id/download/remediation-report', (req, res) => {
   const job = jobManager.getJob(req.params.id);
   if (!job) return res.status(404).send('Job not found');
 
-  const report = job.generatedPatchesBundle || RemediationEngine.generateRemediationReport(job.issues, job.targetDomain);
+  const report = job.generatedRemediationReport || RemediationEngine.generateRemediationReport(job.issues, job.targetDomain);
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="remediation-report-${job.targetDomain}.txt"`);
   res.send(report);
