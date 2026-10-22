@@ -1,105 +1,92 @@
 import { PerformanceMetrics, CrawledPage } from './types.ts';
 
+function numericValue(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
 export async function analyzePerformance(
   targetUrl: string,
   crawledPages: CrawledPage[],
   apiKey?: string
 ): Promise<PerformanceMetrics> {
-  // If API Key provided, query official Google PageSpeed Insights API
   const resolvedKey = apiKey || process.env.PAGESPEED_API_KEY;
+  let apiFailure = 'PAGESPEED_API_KEY is not configured; Google PageSpeed Insights was not called.';
 
   if (resolvedKey) {
     try {
-      const endpoint = `https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url=${encodeURIComponent(
-        targetUrl
-      )}&key=${resolvedKey}&strategy=mobile&category=performance`;
+      const endpoint = new URL('https://www.googleapis.com/pagespeedonline/v5/runPagespeed');
+      endpoint.searchParams.set('url', targetUrl);
+      endpoint.searchParams.set('key', resolvedKey);
+      endpoint.searchParams.set('strategy', 'mobile');
+      endpoint.searchParams.append('category', 'performance');
 
-      const res = await fetch(endpoint, {
-        headers: { 'Accept': 'application/json' }
+      const response = await fetch(endpoint, {
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(30000)
       });
-
-      if (res.ok) {
-        const data = await res.json();
-        const lighthouse = data.lighthouseResult;
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({})) as { error?: { message?: string } };
+        apiFailure = `Google PageSpeed Insights returned HTTP ${response.status}: ${body.error?.message || 'No error detail provided'}.`;
+      } else {
+        const data = await response.json();
+        const lighthouse = data?.lighthouseResult;
         const audits = lighthouse?.audits || {};
-        const fieldExperience = data.loadingExperience;
+        const categoryScore = numericValue(lighthouse?.categories?.performance?.score);
+        if (!lighthouse || categoryScore === undefined) {
+          apiFailure = 'Google PageSpeed Insights returned no valid Lighthouse performance score.';
+        } else {
+          const fieldMetrics = data?.loadingExperience?.metrics || {};
+          const hasFieldData = Object.keys(fieldMetrics).length > 0;
+          const lcpField = numericValue(fieldMetrics.LARGEST_CONTENTFUL_PAINT_MS?.percentile);
+          const clsField = numericValue(fieldMetrics.CUMULATIVE_LAYOUT_SHIFT_SCORE?.percentile);
+          const inpField = numericValue(fieldMetrics.INTERACTION_TO_NEXT_PAINT?.percentile);
 
-        const score = Math.round((lighthouse?.categories?.performance?.score || 0.8) * 100);
-        const lcpMs = audits['largest-contentful-paint']?.numericValue || 1800;
-        const cls = audits['cumulative-layout-shift']?.numericValue || 0.05;
-        const fcpMs = audits['first-contentful-paint']?.numericValue || 1100;
-        const ttfbMs = audits['server-response-time']?.numericValue || 350;
+          const lcpLab = numericValue(audits['largest-contentful-paint']?.numericValue);
+          const clsLab = numericValue(audits['cumulative-layout-shift']?.numericValue);
+          const fcpLab = numericValue(audits['first-contentful-paint']?.numericValue);
+          const ttfbLab = numericValue(audits['server-response-time']?.numericValue);
 
-        // Check if CrUX real-user field data is available
-        const hasFieldData = fieldExperience && fieldExperience.metrics && Object.keys(fieldExperience.metrics).length > 0;
-
-        return {
-          source: 'google_pagespeed_api',
-          isFieldData: hasFieldData,
-          fieldDataNotice: hasFieldData
-            ? 'Authoritative Chrome User Experience (CrUX) 28-day real-user field data retrieved.'
-            : 'Sufficient Chrome UX Report real-user field data not available for this specific URL. Lab simulation shown.',
-          score,
-          metrics: {
-            ttfbMs: Math.round(ttfbMs),
-            lcpMs: Math.round(lcpMs),
-            cls: parseFloat(cls.toFixed(3)),
-            fcpMs: Math.round(fcpMs),
-            inpMs: audits['interactive']?.numericValue ? Math.round(audits['interactive'].numericValue * 0.3) : 150
-          },
-          diagnostics: {
-            oversizedImages: audits['uses-responsive-images']?.details?.items?.length || 0,
-            missingDimensionsCount: audits['image-size-responsive']?.details?.items?.length || 0,
-            renderBlockingResources: audits['render-blocking-resources']?.details?.items?.length || 0,
-            uncompressedResponses: audits['uses-text-compression']?.details?.items?.length || 0,
-            cachingOpportunities: audits['uses-long-cache-ttl']?.details?.items?.length || 0
-          }
-        };
+          return {
+            source: 'google_pagespeed_api',
+            isFieldData: hasFieldData,
+            fieldDataNotice: hasFieldData
+              ? 'Google PageSpeed Insights returned Chrome UX Report field data for this URL. Individual metrics are shown only when present in the response; other values are Lighthouse lab measurements.'
+              : 'Google PageSpeed Insights returned Lighthouse lab data, but no URL-level Chrome UX Report field data was available. Lab data is not real-user field data.',
+            score: Math.round(categoryScore * 100),
+            metrics: {
+              ttfbMs: ttfbLab === undefined ? undefined : Math.round(ttfbLab),
+              lcpMs: lcpField ?? lcpLab,
+              cls: clsField ?? clsLab,
+              fcpMs: fcpLab === undefined ? undefined : Math.round(fcpLab),
+              inpMs: inpField === undefined ? undefined : Math.round(inpField)
+            },
+            diagnostics: {
+              oversizedImages: audits['uses-responsive-images']?.details?.items?.length,
+              missingDimensionsCount: audits['image-size-responsive']?.details?.items?.length,
+              renderBlockingResources: audits['render-blocking-resources']?.details?.items?.length,
+              uncompressedResponses: audits['uses-text-compression']?.details?.items?.length,
+              cachingOpportunities: audits['uses-long-cache-ttl']?.details?.items?.length
+            }
+          };
+        }
       }
-    } catch {
-      // Fall through to local diagnostics on API failure or network timeout
+    } catch (error) {
+      apiFailure = `Google PageSpeed Insights request failed: ${error instanceof Error ? error.message : 'unknown error'}.`;
     }
   }
 
-  // Local diagnostics based on actual crawl measurements & DOM inspection
-  const primaryPage = crawledPages.find(p => p.url === targetUrl) || crawledPages[0];
-  const ttfbMs = primaryPage ? primaryPage.responseTimeMs : 250;
-
-  // Calculate synthetic score based on real crawled attributes
-  let penalty = 0;
-  let missingDimensions = 0;
-  let uncompressed = 0;
-
-  for (const page of crawledPages) {
-    missingDimensions += page.imagesMissingDimensions;
-    if (page.mobileFriendlySignals.missingTextCompression) uncompressed++;
-    if (page.responseTimeMs > 800) penalty += 5;
-    if (!page.hasViewport) penalty += 20;
-    if (page.imagesMissingDimensions > 0) penalty += 8;
-  }
-
-  const score = Math.max(35, Math.min(96, 95 - penalty));
-  const estimatedLcp = Math.max(1200, Math.round(ttfbMs * 2.8 + missingDimensions * 80));
-  const estimatedCls = missingDimensions > 0 ? 0.18 : 0.02;
+  // Local crawl findings are not a PageSpeed score and cannot measure Core Web Vitals.
+  const missingDimensions = crawledPages.reduce((sum, page) => sum + page.imagesMissingDimensions, 0);
+  const uncompressed = crawledPages.filter(page => page.mobileFriendlySignals.missingTextCompression).length;
 
   return {
     source: 'local_diagnostics',
     isFieldData: false,
-    fieldDataNotice: 'Synthesized lab diagnostic analysis. (Configure PAGESPEED_API_KEY in settings or env for official Google Lighthouse & CrUX API data).',
-    score,
-    metrics: {
-      ttfbMs,
-      lcpMs: estimatedLcp,
-      cls: estimatedCls,
-      fcpMs: Math.round(ttfbMs * 1.5),
-      inpMs: 120
-    },
+    fieldDataNotice: `${apiFailure} No synthetic performance score, LCP, CLS, INP, or Lighthouse diagnostics have been invented. Values below are limited to findings directly observed by this application's HTML crawl.`,
+    metrics: {},
     diagnostics: {
-      oversizedImages: Math.round(missingDimensions * 0.5),
       missingDimensionsCount: missingDimensions,
-      renderBlockingResources: 1,
-      uncompressedResponses: uncompressed,
-      cachingOpportunities: 2
+      uncompressedResponses: uncompressed
     }
   };
 }
