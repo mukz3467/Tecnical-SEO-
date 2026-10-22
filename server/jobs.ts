@@ -185,9 +185,15 @@ export class JobManager {
 
       const crawlResult = await crawler.runCrawl((progress, stage, message) => {
         job.progress = progress;
+        job.status = stage === 'crawling' ? 'crawling' : job.status;
         job.currentStage = message;
-        if (progress % 20 === 0) {
+        // Persist each reported stage, not just the final result. This helps recover
+        // the latest known progress after a warm-instance restart (shared storage is
+        // still required for consistent state across independent serverless instances).
+        this.saveJobsToDisk();
+        if (progress % 10 === 0) {
           addLog('info', message);
+          this.saveJobsToDisk();
         }
       });
 
