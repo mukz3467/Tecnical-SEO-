@@ -89,7 +89,7 @@ app.post('/api/jobs', async (req, res) => {
       }
     }
 
-    const job = jobManager.createJob({
+    const job = await jobManager.createJob({
       targetUrl: validation.normalizedUrl,
       sitemapUrl: normalizedSitemapUrl,
       customUrls: normalizedCustomUrls,
@@ -104,12 +104,12 @@ app.post('/api/jobs', async (req, res) => {
   }
 });
 
-app.get('/api/jobs', (req, res) => {
-  res.json(jobManager.getAllJobs());
+app.get('/api/jobs', async (req, res) => {
+  res.json(await jobManager.getAllJobs());
 });
 
-app.get('/api/jobs/:id', (req, res) => {
-  const job = jobManager.getJob(req.params.id);
+app.get('/api/jobs/:id', async (req, res) => {
+  const job = await jobManager.getJob(req.params.id);
   if (!job) {
     return res.status(404).json({ error: 'Job not found' });
   }
@@ -119,8 +119,8 @@ app.get('/api/jobs/:id', (req, res) => {
 // -------------------------------------------------------------
 // 5. DOWNLOADS & EXPORTS
 // -------------------------------------------------------------
-app.get('/api/jobs/:id/export/json', (req, res) => {
-  const job = jobManager.getJob(req.params.id);
+app.get('/api/jobs/:id/export/json', async (req, res) => {
+  const job = await jobManager.getJob(req.params.id);
   if (!job) return res.status(404).send('Job not found');
 
   res.setHeader('Content-Type', 'application/json');
@@ -128,8 +128,8 @@ app.get('/api/jobs/:id/export/json', (req, res) => {
   res.send(JSON.stringify(job, null, 2));
 });
 
-app.get('/api/jobs/:id/export/csv', (req, res) => {
-  const job = jobManager.getJob(req.params.id);
+app.get('/api/jobs/:id/export/csv', async (req, res) => {
+  const job = await jobManager.getJob(req.params.id);
   if (!job) return res.status(404).send('Job not found');
 
   const headers = ['ID', 'Category', 'Severity', 'Title', 'Affected URL', 'Fix Status', 'Evidence', 'Recommendation'];
@@ -150,8 +150,8 @@ app.get('/api/jobs/:id/export/csv', (req, res) => {
   res.send(csv);
 });
 
-app.get('/api/jobs/:id/download/sitemap', (req, res) => {
-  const job = jobManager.getJob(req.params.id);
+app.get('/api/jobs/:id/download/sitemap', async (req, res) => {
+  const job = await jobManager.getJob(req.params.id);
   if (!job) return res.status(404).send('Job not found');
 
   const sitemapXml = job.generatedSitemapXml || RemediationEngine.generateCleanSitemap(job.crawledPages, job.targetDomain);
@@ -160,8 +160,8 @@ app.get('/api/jobs/:id/download/sitemap', (req, res) => {
   res.send(sitemapXml);
 });
 
-app.get('/api/jobs/:id/download/robots', (req, res) => {
-  const job = jobManager.getJob(req.params.id);
+app.get('/api/jobs/:id/download/robots', async (req, res) => {
+  const job = await jobManager.getJob(req.params.id);
   if (!job) return res.status(404).send('Job not found');
 
   const robots = job.generatedRobotsTxt || RemediationEngine.generateOptimizedRobotsTxt(job.targetDomain, job.sitemapUrl);
@@ -170,8 +170,8 @@ app.get('/api/jobs/:id/download/robots', (req, res) => {
   res.send(robots);
 });
 
-app.get('/api/jobs/:id/download/remediation-report', (req, res) => {
-  const job = jobManager.getJob(req.params.id);
+app.get('/api/jobs/:id/download/remediation-report', async (req, res) => {
+  const job = await jobManager.getJob(req.params.id);
   if (!job) return res.status(404).send('Job not found');
 
   const report = job.generatedRemediationReport || RemediationEngine.generateRemediationReport(job.issues, job.targetDomain);
