@@ -219,7 +219,7 @@ export class GoogleSearchConsoleIntegration {
         ? 'Counts come only from successful Google URL Inspection API responses. URLs that could not be inspected are excluded. Sitemap submission does not guarantee indexing.'
         : 'Sitemap submission was attempted, but URL Inspection authentication failed. Local crawl results are not Google indexing status.';
       return {
-        connected: sitemapSubmitted || totalInspected > 0,
+        connected: true,
         authMethod: 'service_account',
         propertyUrl,
         isVerified: true,
