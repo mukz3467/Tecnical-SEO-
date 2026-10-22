@@ -83,7 +83,8 @@ export class GoogleSearchConsoleIntegration {
     sitemapInfo: SitemapInfo,
     credentials?: { clientEmail?: string; privateKey?: string }
   ): Promise<GoogleSearchConsoleStatus> {
-    const propertyUrl = `sc-domain:${targetDomain.toLowerCase()}`;
+    const configuredProperty = process.env.GOOGLE_SEARCH_CONSOLE_PROPERTY_URL?.trim();
+    const propertyUrl = configuredProperty || `sc-domain:${targetDomain.toLowerCase()}`;
     const sitemapTarget = /^https?:\/\//i.test(sitemapUrl) ? sitemapUrl : `https://${targetDomain}/sitemap.xml`;
     let account: ServiceAccount | undefined;
     try {
