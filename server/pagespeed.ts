@@ -56,7 +56,7 @@ export async function analyzePerformance(
             metrics: {
               ttfbMs: ttfbLab === undefined ? undefined : Math.round(ttfbLab),
               lcpMs: lcpField ?? lcpLab,
-              cls: clsField ?? clsLab,
+              cls: clsField !== undefined ? clsField / 1000 : clsLab,
               fcpMs: fcpLab === undefined ? undefined : Math.round(fcpLab),
               inpMs: inpField === undefined ? undefined : Math.round(inpField)
             },
