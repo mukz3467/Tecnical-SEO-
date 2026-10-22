@@ -26,7 +26,9 @@ export class RemediationEngine {
       ...Array.from(urls).sort().map(url => `  <url>\n    <loc>${this.escapeXml(url)}</loc>\n  </url>`),
       '</urlset>'
     ];
-    return xmlLines.join('\n');
+    const xml = xmlLines.join('\n');
+    if (!this.validateXml(xml)) throw new Error('Generated sitemap failed XML structure validation.');
+    return xml;
   }
 
   /**
