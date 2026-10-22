@@ -97,7 +97,7 @@ Sitemap: ${sitemapTarget}
       lines.push('---');
       lines.push('');
     });
-    return lines.join('\\n');
+    return lines.join(String.fromCharCode(10));
   }
 
   private static validateXml(xml: string): boolean {
