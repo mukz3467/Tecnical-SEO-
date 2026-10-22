@@ -7,7 +7,6 @@ import { TechnicalSeoAuditor } from './audit.ts';
 import { analyzePerformance } from './pagespeed.ts';
 import { GoogleSearchConsoleIntegration } from './gsc.ts';
 import { RemediationEngine } from './remediation.ts';
-import { SandboxSiteManager } from './sandboxSite.ts';
 
 const JOBS_DIR = path.resolve(process.cwd(), '.data');
 const JOBS_FILE = path.join(JOBS_DIR, 'jobs.json');
@@ -233,7 +232,7 @@ export class JobManager {
       // Generate Clean Artifacts
       job.generatedSitemapXml = RemediationEngine.generateCleanSitemap(job.crawledPages, job.targetDomain);
       job.generatedRobotsTxt = RemediationEngine.generateOptimizedRobotsTxt(job.targetDomain, job.sitemapUrl);
-      job.generatedPatchesBundle = RemediationEngine.generateUnifiedPatch(job.issues, job.targetDomain);
+      job.generatedPatchesBundle = RemediationEngine.generateRemediationReport(job.issues, job.targetDomain);
 
       // Stage 5: Google Search Console Submission
       job.status = 'submitting_sitemap';
