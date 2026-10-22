@@ -5,7 +5,6 @@ import {
   Code2, ExternalLink, ShieldAlert, Sparkles, Filter 
 } from 'lucide-react';
 import { SeoIssue, IssueCategory, IssueSeverity, FixStatus } from '../types.ts';
-import { ApplyAllFixesModal } from './ApplyAllFixesModal.tsx';
 
 interface IssuesTableProps {
   issues: SeoIssue[];
@@ -59,14 +58,6 @@ export const IssuesTable: React.FC<IssuesTableProps> = ({
       return true;
     });
   }, [issues, selectedCategory, selectedSeverity, selectedStatus, searchQuery]);
-
-  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
-
-  const safeIssues = useMemo(() => {
-    return issues.filter(i => i.proposedFix?.isSafeToAutoApply && (i.fixStatus === 'available' || i.fixStatus === 'rolled_back'));
-  }, [issues]);
-
-  const safeFixesAvailableCount = safeIssues.length;
 
   const getSeverityBadge = (sev: IssueSeverity) => {
     switch (sev) {
@@ -130,20 +121,10 @@ export const IssuesTable: React.FC<IssuesTableProps> = ({
             </span>
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            Real evidence, proposed code modifications, authorized auto-application, and rollback history.
+            Evidence-backed findings and proposed snippets for review. This deployment does not write to live websites.
           </p>
         </div>
 
-        {safeFixesAvailableCount > 0 && (
-          <button
-            onClick={() => setIsConfirmModalOpen(true)}
-            disabled={isApplying}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-md shadow-emerald-500/20 transition disabled:opacity-50 cursor-pointer shrink-0"
-          >
-            <Wrench className="w-3.5 h-3.5" />
-            <span>Apply All {safeFixesAvailableCount} Safe Fixes</span>
-          </button>
-        )}
       </div>
 
       {/* Filter Bar */}
@@ -242,30 +223,6 @@ export const IssuesTable: React.FC<IssuesTableProps> = ({
                     </div>
                   </div>
 
-                  {/* Quick Action Button in Row */}
-                  <div className="shrink-0 flex items-center gap-2 ml-2" onClick={e => e.stopPropagation()}>
-                    {issue.proposedFix && (issue.fixStatus === 'available' || issue.fixStatus === 'rolled_back') && (
-                      <button
-                        onClick={() => onApplyFix(issue.id)}
-                        disabled={isApplying}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 transition disabled:opacity-50"
-                      >
-                        <Wrench className="w-3.5 h-3.5" />
-                        <span className="hidden sm:inline">Apply Fix</span>
-                      </button>
-                    )}
-
-                    {issue.rollbackData && issue.fixStatus === 'validated' && (
-                      <button
-                        onClick={() => onRollbackFix(issue.id)}
-                        disabled={isApplying}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/40 transition disabled:opacity-50"
-                      >
-                        <Undo2 className="w-3.5 h-3.5" />
-                        <span className="hidden sm:inline">Rollback</span>
-                      </button>
-                    )}
-                  </div>
                 </div>
 
                 {/* Expanded Details Drawer */}
@@ -295,7 +252,7 @@ export const IssuesTable: React.FC<IssuesTableProps> = ({
                             Proposed Code Fix ({issue.proposedFix.targetFileOrElement})
                           </span>
                           <span className="text-[11px] text-slate-400">
-                            {issue.proposedFix.isSafeToAutoApply ? 'Safe for automated application' : 'Requires manual review'}
+                            'Candidate fix — review required before deployment'
                           </span>
                         </div>
 
@@ -307,35 +264,7 @@ export const IssuesTable: React.FC<IssuesTableProps> = ({
                           <pre>{issue.proposedFix.proposedCode}</pre>
                         </div>
 
-                        <div className="flex items-center justify-between pt-1">
-                          {issue.validationResult ? (
-                            <div className="text-[11px] text-emerald-400 flex items-center gap-1 font-medium">
-                              <CheckCircle2 className="w-3.5 h-3.5" />
-                              <span>{issue.validationResult.details} ({new Date(issue.validationResult.timestamp).toLocaleTimeString()})</span>
-                            </div>
-                          ) : (
-                            <span className="text-[11px] text-slate-500">Validation will execute immediately after applying.</span>
-                          )}
-
-                          <div className="flex items-center gap-2">
-                            {issue.rollbackData && issue.fixStatus === 'validated' && (
-                              <button
-                                onClick={() => onRollbackFix(issue.id)}
-                                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/40 transition"
-                              >
-                                Revert (Rollback)
-                              </button>
-                            )}
-                            {(issue.fixStatus === 'available' || issue.fixStatus === 'rolled_back') && (
-                              <button
-                                onClick={() => onApplyFix(issue.id)}
-                                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition"
-                              >
-                                Apply Fix Now
-                              </button>
-                            )}
-                          </div>
-                        </div>
+                        <p className="text-[11px] text-amber-300">Proposal only: no live change or deployment validation has occurred.</p>
                       </div>
                     )}
                   </div>
@@ -346,17 +275,6 @@ export const IssuesTable: React.FC<IssuesTableProps> = ({
         )}
       </div>
 
-      {/* Confirmation Modal */}
-      <ApplyAllFixesModal
-        isOpen={isConfirmModalOpen}
-        onClose={() => setIsConfirmModalOpen(false)}
-        onConfirm={async () => {
-          await onApplyAllSafeFixes();
-          setIsConfirmModalOpen(false);
-        }}
-        safeIssues={safeIssues}
-        isApplying={isApplying || false}
-      />
     </div>
   );
 };
