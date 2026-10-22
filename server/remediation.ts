@@ -45,27 +45,6 @@ Sitemap: ${sitemapTarget}
   }
 
   /**
-   * Apply an authorized fix for an individual issue.
-   */
-  public static async applyFix(
-    _issue: SeoIssue,
-    _job: AuditJob,
-    _isAuthorized: boolean = false
-  ): Promise<{ success: boolean; message: string; diff?: string }> {
-    return {
-      success: false,
-      message: 'Live website writes are not configured. No changes were applied. Use the reviewed remediation report with an authorized source-control or hosting workflow.'
-    };
-  }
-
-  public static rollbackFix(_issue: SeoIssue, _job: AuditJob): { success: boolean; message: string } {
-    return {
-      success: false,
-      message: 'Rollback is unavailable because this application did not modify live website files.'
-    };
-  }
-
-  /**
    * Generates an evidence-led remediation report. It is a review document, not a git-applicable patch.
    */
   public static generateRemediationReport(issues: SeoIssue[], targetDomain: string): string {
