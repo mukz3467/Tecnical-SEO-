@@ -24,7 +24,14 @@ export class JobManager {
   }
 
   private async readBlobJob(id: string): Promise<AuditJob | undefined> {
-    const blob = await get(`autoindex/jobs/${id}.json`, { access: 'private', useCache: false });
+    // Blob SDK get() requires the blob URL, not its pathname.
+    // Resolve the private blob URL from the store listing first.
+    const pathname = `autoindex/jobs/${id}.json`;
+    const listing = await list({ prefix: pathname, limit: 10 });
+    const blobRef = listing.blobs.find(item => item.pathname === pathname);
+    if (!blobRef?.url) return undefined;
+
+    const blob = await get(blobRef.url, { access: 'private', useCache: false });
     if (!blob || blob.statusCode !== 200 || !blob.stream) return undefined;
     const raw = await new Response(blob.stream).text();
     return JSON.parse(raw) as AuditJob;
