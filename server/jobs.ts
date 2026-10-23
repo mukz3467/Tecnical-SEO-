@@ -57,12 +57,18 @@ export class JobManager {
 
   private async persistJobToSharedStorage(job: AuditJob, _addToIndex = false): Promise<void> {
     if (!this.hasSharedStorage()) return;
-    await put(`autoindex/jobs/${job.id}.json`, JSON.stringify(job), {
-      access: 'private',
-      allowOverwrite: true,
-      contentType: 'application/json',
-      cacheControlMaxAge: 60
+    const snapshot = JSON.stringify(job);
+    const previous = this.blobPersistQueue.get(job.id) || Promise.resolve();
+    const next = previous.catch(() => undefined).then(async () => {
+      await put(`autoindex/jobs/${job.id}.json`, snapshot, {
+        access: 'private',
+        allowOverwrite: true,
+        contentType: 'application/json',
+        cacheControlMaxAge: 60
+      });
     });
+    this.blobPersistQueue.set(job.id, next);
+    await next;
   }
 
   private queueSharedPersist(job: AuditJob): void {
