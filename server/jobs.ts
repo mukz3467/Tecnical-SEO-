@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 import { waitUntil } from '@vercel/functions';
+import { get, list, put } from '@vercel/blob';
 import fs from 'fs';
 import path from 'path';
 import { AuditJob } from './types.ts';
@@ -15,6 +16,19 @@ const JOBS_FILE = path.join(JOBS_DIR, 'jobs.json');
 export class JobManager {
   private static instance: JobManager;
   private jobs = new Map<string, AuditJob>();
+  private lastBlobPersistAt = new Map<string, number>();
+  private blobPersistQueue = new Map<string, Promise<void>>();
+
+  private hasSharedStorage(): boolean {
+    return Boolean(process.env.BLOB_STORE_ID && process.env.VERCEL_OIDC_TOKEN) || Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+  }
+
+  private async readBlobJob(id: string): Promise<AuditJob | undefined> {
+    const blob = await get(`autoindex/jobs/${id}.json`, { access: 'private', useCache: false });
+    if (!blob || blob.statusCode !== 200 || !blob.stream) return undefined;
+    const raw = await new Response(blob.stream).text();
+    return JSON.parse(raw) as AuditJob;
+  }
 
   private constructor() {
     this.loadJobsFromDisk();
@@ -41,102 +55,79 @@ export class JobManager {
     }
   }
 
-  private async persistJobToSharedStorage(job: AuditJob, addToIndex = false): Promise<void> {
-    const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
-    const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
-    if (!redisUrl || !redisToken) return;
+  private async persistJobToSharedStorage(job: AuditJob, _addToIndex = false): Promise<void> {
+    if (!this.hasSharedStorage()) return;
+    await put(`autoindex/jobs/${job.id}.json`, JSON.stringify(job), {
+      access: 'private',
+      allowOverwrite: true,
+      contentType: 'application/json',
+      cacheControlMaxAge: 60
+    });
+  }
 
-    const command = async (parts: string[]) => {
-      const response = await fetch(redisUrl, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${redisToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(parts),
-        signal: AbortSignal.timeout(5000)
+  private queueSharedPersist(job: AuditJob): void {
+    if (!this.hasSharedStorage()) return;
+    const now = Date.now();
+    const last = this.lastBlobPersistAt.get(job.id) || 0;
+    // Keep Blob writes inside the Hobby free allowance during a normal crawl.
+    if (now - last < 8000) return;
+    this.lastBlobPersistAt.set(job.id, now);
+    const previous = this.blobPersistQueue.get(job.id) || Promise.resolve();
+    const snapshot = JSON.stringify(job);
+    const next = previous.catch(() => undefined).then(async () => {
+      await put(`autoindex/jobs/${job.id}.json`, snapshot, {
+        access: 'private',
+        allowOverwrite: true,
+        contentType: 'application/json',
+        cacheControlMaxAge: 60
       });
-      if (!response.ok) throw new Error(`Shared job storage returned HTTP ${response.status}`);
-      const result = await response.json() as { result?: unknown; error?: string };
-      if (result.error) throw new Error(result.error);
-      return result.result;
-    };
-
-    await command(['SET', `autoindex:job:${job.id}`, JSON.stringify(job)]);
-    if (addToIndex) {
-      await command(['LPUSH', 'autoindex:jobs:index', job.id]);
-      await command(['LTRIM', 'autoindex:jobs:index', '0', '49']);
-    }
+    });
+    this.blobPersistQueue.set(job.id, next);
+    void next.catch(e => console.error('Could not persist audit job to Vercel Blob:', e));
   }
 
   private saveJobsToDisk(jobToPersist?: AuditJob): void {
     try {
-      if (!fs.existsSync(JOBS_DIR)) {
-        fs.mkdirSync(JOBS_DIR, { recursive: true });
-      }
-      const list = Array.from(this.jobs.values()).slice(-50);
-      fs.writeFileSync(JOBS_FILE, JSON.stringify(list, null, 2), 'utf-8');
+      if (!fs.existsSync(JOBS_DIR)) fs.mkdirSync(JOBS_DIR, { recursive: true });
+      const listOnDisk = Array.from(this.jobs.values()).slice(-50);
+      fs.writeFileSync(JOBS_FILE, JSON.stringify(listOnDisk, null, 2), 'utf-8');
     } catch (e) {
       console.warn('Could not save jobs to disk:', e);
     }
-    if (jobToPersist && process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
-      void this.persistJobToSharedStorage(jobToPersist).catch(e => console.error('Could not persist audit job:', e));
-    }
+    if (jobToPersist) this.queueSharedPersist(jobToPersist);
   }
 
   public async getJob(id: string): Promise<AuditJob | undefined> {
-    const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
-    const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
-    if (redisUrl && redisToken) {
+    if (this.hasSharedStorage()) {
       try {
-        const response = await fetch(redisUrl, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${redisToken}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(['GET', `autoindex:job:${id}`]),
-          signal: AbortSignal.timeout(5000)
-        });
-        if (response.ok) {
-          const payload = await response.json() as { result?: string | null };
-          if (typeof payload.result === 'string') {
-            const job = JSON.parse(payload.result) as AuditJob;
-            this.jobs.set(id, job);
-            return job;
-          }
+        const job = await this.readBlobJob(id);
+        if (job) {
+          this.jobs.set(id, job);
+          return job;
         }
+        return undefined;
       } catch (e) {
-        console.warn('Shared job storage read failed:', e);
+        console.error('Shared Vercel Blob job read failed:', e);
+        // Do not silently use an instance-local copy when shared storage is configured.
+        return undefined;
       }
     }
     return this.jobs.get(id);
   }
 
   public async getAllJobs(): Promise<AuditJob[]> {
-    const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
-    const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
-    if (redisUrl && redisToken) {
+    if (this.hasSharedStorage()) {
       try {
-        const response = await fetch(redisUrl, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${redisToken}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(['LRANGE', 'autoindex:jobs:index', '0', '49']),
-          signal: AbortSignal.timeout(5000)
-        });
-        if (response.ok) {
-          const payload = await response.json() as { result?: string[] };
-          if (Array.isArray(payload.result)) {
-            const jobs = (await Promise.all(payload.result.map(id => this.getJob(id))))
-              .filter((job): job is AuditJob => Boolean(job));
-            return jobs.sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
-          }
-        }
+        const result = await list({ prefix: 'autoindex/jobs/', limit: 50 });
+        const jobs = await Promise.all(result.blobs.map(async blob => {
+          const id = blob.pathname.split('/').pop()?.replace(/\\.json$/, '');
+          return id ? this.readBlobJob(id).catch(() => undefined) : undefined;
+        }));
+        return jobs.filter((job): job is AuditJob => Boolean(job))
+          .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
       } catch (e) {
-        console.warn('Shared job history read failed:', e);
+        console.error('Shared Vercel Blob job history read failed:', e);
+        return [];
       }
     }
     return Array.from(this.jobs.values()).sort(
@@ -221,13 +212,13 @@ export class JobManager {
 
     this.jobs.set(id, job);
     this.saveJobsToDisk(job);
-    const sharedConfigured = !!(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
+    const sharedConfigured = this.hasSharedStorage();
     if (sharedConfigured) {
       try {
         await this.persistJobToSharedStorage(job, true);
       } catch (e) {
         console.error('Could not initialize shared job storage:', e);
-        throw new Error('Shared job storage is configured but unavailable. Check the Upstash Redis REST URL and token.');
+        throw new Error('Shared job storage is configured but unavailable. Check the Vercel Blob store connection in Project Storage.');
       }
     }
 
@@ -241,6 +232,7 @@ export class JobManager {
         message: `Pipeline halted with error: ${job.error}`
       });
       this.saveJobsToDisk(job);
+      await this.persistJobToSharedStorage(job).catch(e => console.error('Could not persist failed audit job:', e));
     });
 
     if (process.env.VERCEL === '1') {
@@ -365,6 +357,7 @@ export class JobManager {
       const proposedCount = job.issues.filter(issue => issue.proposedFix).length;
       addLog('success', `Audit finalized: ${job.summary.criticalCount} Critical, ${job.summary.highCount} High, ${job.summary.mediumCount} Medium issues. ${proposedCount} proposed remediation snippets prepared; no live-site files were changed.`);
       this.saveJobsToDisk(job);
+      await this.persistJobToSharedStorage(job).catch(e => console.error('Could not persist failed audit job:', e));
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       job.status = 'failed';
