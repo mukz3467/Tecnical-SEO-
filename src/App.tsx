@@ -115,12 +115,29 @@ export default function App() {
         body: JSON.stringify(params)
       });
 
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || 'Failed to start audit job');
+      const responseText = await res.text();
+      let responseData: any = null;
+      try {
+        responseData = responseText ? JSON.parse(responseText) : null;
+      } catch {
+        // Serverless platforms can return plain-text/HTML errors instead of JSON.
       }
 
-      const newJob: AuditJob = await res.json();
+      if (!res.ok) {
+        const serverMessage =
+          (responseData && typeof responseData.error === 'string' && responseData.error) ||
+          (responseText && responseText.slice(0, 300)) ||
+          'No error details were returned by the server.';
+        throw new Error(`Could not start audit (HTTP ${res.status}): ${serverMessage}`);
+      }
+
+      if (!responseData || typeof responseData !== 'object' || !responseData.id) {
+        throw new Error(
+          `Audit API returned an invalid response (HTTP ${res.status}). ${responseText.slice(0, 300) || 'The response was empty.'}`
+        );
+      }
+
+      const newJob: AuditJob = responseData as AuditJob;
       setActiveJob(newJob);
       setJobs(prev => [newJob, ...prev]);
     } catch (err: unknown) {
