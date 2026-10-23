@@ -120,7 +120,7 @@ export class JobManager {
       try {
         const result = await list({ prefix: 'autoindex/jobs/', limit: 50 });
         const jobs = await Promise.all(result.blobs.map(async blob => {
-          const id = blob.pathname.split('/').pop()?.replace(/\\.json$/, '');
+          const id = blob.pathname.split('/').pop()?.replace(/\.json$/, '');
           return id ? this.readBlobJob(id).catch(() => undefined) : undefined;
         }));
         return jobs.filter((job): job is AuditJob => Boolean(job))
