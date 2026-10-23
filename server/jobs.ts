@@ -357,7 +357,7 @@ export class JobManager {
       const proposedCount = job.issues.filter(issue => issue.proposedFix).length;
       addLog('success', `Audit finalized: ${job.summary.criticalCount} Critical, ${job.summary.highCount} High, ${job.summary.mediumCount} Medium issues. ${proposedCount} proposed remediation snippets prepared; no live-site files were changed.`);
       this.saveJobsToDisk(job);
-      await this.persistJobToSharedStorage(job).catch(e => console.error('Could not persist failed audit job:', e));
+      await this.persistJobToSharedStorage(job).catch(e => console.error('Could not persist completed audit job:', e));
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       job.status = 'failed';
@@ -365,7 +365,7 @@ export class JobManager {
       job.currentStage = `Failed: ${errorMsg}`;
       addLog('error', `Job aborted due to error: ${errorMsg}`);
       this.saveJobsToDisk(job);
-      await this.persistJobToSharedStorage(job).catch(e => console.error('Could not persist completed audit job:', e));
+      await this.persistJobToSharedStorage(job).catch(e => console.error('Could not persist failed audit job:', e));
     }
   }
 
