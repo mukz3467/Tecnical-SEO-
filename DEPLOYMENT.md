@@ -45,14 +45,12 @@ The app generates a structurally validated sitemap, a conservative robots.txt su
 
 ## Shared audit-job storage (Vercel serverless)
 
-Vercel function instances do not share memory or `/tmp`. To keep audit progress available between requests, configure a Redis-compatible REST store. The app supports Upstash Redis REST without an extra npm dependency.
+Vercel function instances do not share memory or `/tmp`. Audit snapshots therefore use **Vercel Blob private storage** instead of an external Redis provider. Vercel Hobby includes a free Blob allowance (1 GB storage, 10,000 simple operations, 2,000 advanced operations, and 10 GB transfer per month); when Hobby limits are exceeded, access pauses until the allowance resets rather than charging overage. See the official [Vercel Blob pricing documentation](https://vercel.com/docs/vercel-blob/usage-and-pricing).
 
-1. Create an Upstash account and create a Redis database on its free plan: https://console.upstash.com/
-2. Open the database's **REST API** section and copy the REST URL and REST token.
-3. In Vercel, open the `tecnical-seo` project → **Settings → Environment Variables**.
-4. Add these variables for **Production** (and Preview if you test previews):
-   - `UPSTASH_REDIS_REST_URL` = the Upstash REST URL
-   - `UPSTASH_REDIS_REST_TOKEN` = the Upstash REST token (keep it secret; never put it in frontend code or commit it)
+1. Open the `tecnical-seo` project in Vercel and select **Storage**.
+2. Select **Create Storage** (or **Create Database**) → **Blob**.
+3. Choose **Private** access, name it `autoindex-jobs`, and create it.
+4. In the Blob store's **Projects** tab, connect it to the `tecnical-seo` project for **Production** (and Preview if needed). Vercel should automatically provide the required Blob environment variables; do not manually paste tokens into source code.
 5. Redeploy the latest production deployment, then run a new audit.
 
-The integration stores job snapshots under `autoindex:job:<id>` and maintains a capped 50-job history index. Without both environment variables, local development continues to use local storage and Vercel cannot guarantee shared job retrieval. Upstash's free plan has usage limits; this is intended to work without a paid plan while usage remains within those limits. Sitemap submission and crawl completion still depend on target-site access, serverless runtime limits, and Google API configuration.
+The app writes job snapshots to private paths under `autoindex/jobs/`. Progress writes are throttled to reduce usage. If no Blob store is connected, local development uses local storage, but Vercel cannot guarantee shared job retrieval. Sitemap submission and crawl completion still depend on target-site access, serverless runtime limits, and Google API configuration.
