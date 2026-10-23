@@ -236,7 +236,7 @@ export class JobManager {
     }
 
     // Keep background work alive after the response in Vercel's function runtime.
-    const pipeline = this.runJobPipeline(job).catch(err => {
+    const pipeline = this.runJobPipeline(job).catch(async err => {
       job.status = 'failed';
       job.error = err instanceof Error ? err.message : String(err);
       job.logs.push({
