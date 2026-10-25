@@ -43,14 +43,27 @@ Set the server-side `PAGESPEED_API_KEY` to enable the Google PageSpeed Insights 
 The app generates a structurally validated sitemap, a conservative robots.txt suggestion, and an evidence-led remediation **report** containing proposed snippets. It does not create an executable `.patch`, edit third-party live files, or claim that a fix was applied. A real write integration would need explicit authorization, source access, validation, and rollback support.
 
 
-## Shared audit-job storage (Vercel serverless)
+## Durable audit-job storage (Vercel serverless)
 
-Vercel function instances do not share memory or `/tmp`. Audit snapshots therefore use **Vercel Blob private storage** instead of an external Redis provider. Vercel Hobby includes a free Blob allowance (1 GB storage, 10,000 simple operations, 2,000 advanced operations, and 10 GB transfer per month); when Hobby limits are exceeded, access pauses until the allowance resets rather than charging overage. See the official [Vercel Blob pricing documentation](https://vercel.com/docs/vercel-blob/usage-and-pricing).
+Vercel Functions do not share memory or `/tmp`. The API now supports **Supabase Postgres as the preferred shared job store**, with private Vercel Blob as a fallback. Job snapshots include status, progress, crawled pages, logs, and report data. Progress snapshots are throttled to limit writes.
 
-1. Open the `tecnical-seo` project in Vercel and select **Storage**.
-2. Select **Create Storage** (or **Create Database**) → **Blob**.
-3. Choose **Private** access, name it `autoindex-jobs`, and create it.
-4. In the Blob store's **Projects** tab, connect it to the `tecnical-seo` project for **Production** (and Preview if needed). Vercel should automatically provide the required Blob environment variables; do not manually paste tokens into source code.
-5. Redeploy the latest production deployment, then run a new audit.
+### Supabase setup (recommended)
 
-The app writes job snapshots to private paths under `autoindex/jobs/`. Progress writes are throttled to reduce usage. If no Blob store is connected, local development uses local storage, but Vercel cannot guarantee shared job retrieval. Sitemap submission and crawl completion still depend on target-site access, serverless runtime limits, and Google API configuration.
+1. Create a free Supabase project.
+2. In the Supabase SQL Editor, run the migration in `supabase/migrations/202610250001_audit_jobs.sql`.
+3. In Supabase project settings, copy the Project URL and the **service_role** secret key.
+4. In Vercel → `tecnical-seo` → Settings → Environment Variables, add:
+   - `SUPABASE_URL` = your Supabase project URL
+   - `SUPABASE_SERVICE_ROLE_KEY` = your server-side service-role secret
+   Add them to Production (and Preview if you test preview deployments), then redeploy.
+5. Start a **new** audit after the deployment is Ready. Existing job records in Blob are not automatically migrated to Supabase.
+
+**Security:** Never use `SUPABASE_SERVICE_ROLE_KEY` in a `VITE_*` variable, frontend code, or a public repository. It must remain server-side. The migration enables row-level security and deliberately defines no public read/write policies.
+
+### Existing Vercel Blob fallback
+
+If the Supabase environment variables are not configured, the app continues using the connected private Blob store. Connect the `autoindex-jobs` Blob store to the Vercel project and redeploy. Blob stores snapshots, but it is not a queue/worker scheduler.
+
+### Important runtime limitation
+
+Persistent job records prevent independent Vercel instances from losing access to a job's saved state. However, persistence alone does **not** make a running in-memory crawler resumable after a function is forcibly terminated: the crawl queue/visited set and stage execution must be checkpointed and scheduled in bounded worker steps for full crash recovery. This deployment currently persists job snapshots and progress; use a durable queue/worker or a chunked checkpoint worker before treating long crawls as guaranteed to resume after a hard timeout.
