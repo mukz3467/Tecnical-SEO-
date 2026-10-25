@@ -136,7 +136,9 @@ export class GoogleSearchConsoleIntegration {
     credentials?: { clientEmail?: string; privateKey?: string }
   ): Promise<GoogleSearchConsoleStatus> {
     const configuredProperty = process.env.GOOGLE_SEARCH_CONSOLE_PROPERTY_URL?.trim();
-    const propertyUrl = configuredProperty || `sc-domain:${targetDomain.toLowerCase()}`;
+    const targetHost = targetDomain.toLowerCase().replace(/\.$/, '');
+    const targetHostWithoutWww = targetHost.replace(/^www\./, '');
+    let propertyUrl = configuredProperty || `https://${targetHost}/`;
     const sitemapTarget = /^https?:\/\//i.test(sitemapUrl) ? sitemapUrl : `https://${targetDomain}/sitemap.xml`;
     let account: ServiceAccount | undefined;
     try {
@@ -205,20 +207,41 @@ export class GoogleSearchConsoleIntegration {
         throw new Error(`Could not verify Search Console access (HTTP ${sitesResult.response.status}): ${sitesResult.data?.error?.message || 'Google API error'}`);
       }
       const availableSites: Array<{ siteUrl?: string; permissionLevel?: string }> = sitesResult.data?.siteEntry || [];
-      const propertyAccessible = availableSites.some(site => site.siteUrl === propertyUrl);
-      if (!propertyAccessible) {
+      const matchesTargetHost = (siteUrl?: string): boolean => {
+        if (!siteUrl) return false;
+        if (siteUrl.startsWith('sc-domain:')) {
+          const host = siteUrl.slice('sc-domain:'.length).toLowerCase().replace(/^www\./, '');
+          return host === targetHostWithoutWww;
+        }
+        try {
+          const host = new URL(siteUrl).hostname.toLowerCase().replace(/^www\./, '');
+          return host === targetHostWithoutWww;
+        } catch {
+          return false;
+        }
+      };
+      const matchingSites = availableSites.filter(site => matchesTargetHost(site.siteUrl));
+      const propertyEntry =
+        matchingSites.find(site => site.siteUrl === configuredProperty) ||
+        matchingSites.find(site => site.siteUrl === `sc-domain:${targetHostWithoutWww}`) ||
+        matchingSites.find(site => site.siteUrl === `https://${targetHost}/`) ||
+        matchingSites.find(site => site.siteUrl === `http://${targetHost}/`) ||
+        matchingSites[0];
+
+      if (!propertyEntry?.siteUrl) {
         return {
           ...base,
           authMethod: 'service_account',
-          sitemapSubmissionResult: `NOT SUBMITTED: the authenticated service account cannot access the exact Search Console property ${propertyUrl}. Add its client email as a user of that verified property, then retry.`,
+          sitemapSubmissionResult: `NOT SUBMITTED: the service account cannot access a Search Console property matching ${targetDomain}. Add its client email to the verified property for this exact website, then retry.`,
           inspectionSummary: {
             ...base.inspectionSummary,
             verdict: 'Search Console property access not confirmed',
-            coverageIssues: [`Property ${propertyUrl} was not present in the accessible Search Console site list.`],
-            note: 'No sitemap submission or URL Inspection was attempted because the exact property was not confirmed as accessible.'
+            coverageIssues: [`No accessible Search Console property matched host ${targetDomain}.`],
+            note: 'No sitemap submission or URL Inspection was attempted because no accessible property matched the audited website.'
           }
         };
       }
+      propertyUrl = propertyEntry.siteUrl;
       const sitemapApiUrl = `https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(propertyUrl)}/sitemaps/${encodeURIComponent(sitemapTarget)}`;
       const submission = await googleRequest(sitemapApiUrl, token, { method: 'PUT' });
       const sitemapSubmitted = submission.response.ok;
