@@ -238,7 +238,7 @@ export class JobManager {
       const resumable = ['queued', 'crawling', 'auditing', 'remediating', 'validating', 'submitting_sitemap'].includes(data.status);
       updatedAt = data.updated_at;
       if (!resumable) return;
-      const staleForMs = Date.now() - new Date(updatedAt).getTime();
+      const staleForMs = Date.now() - new Date(data.updated_at).getTime();
       if (staleForMs < 20000) return;
 
       // Compare-and-set the timestamp so only one Supabase-backed instance claims recovery.
@@ -360,7 +360,7 @@ export class JobManager {
     customUrls?: string[];
     autoFixEnabled?: boolean;
     connectedSourceMode?: AuditJob['connectedSourceMode'];
-  }): AuditJob {
+  }): Promise<AuditJob> {
     if (process.env.VERCEL === '1' && !this.hasSharedStorage()) {
       throw new Error('Shared audit storage is not configured on Vercel. Add SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Vercel Environment Variables, run the Supabase audit_jobs migration, then redeploy.');
     }
@@ -540,13 +540,13 @@ export class JobManager {
         ? `Real PageSpeed performance score: ${job.performanceMetrics.score}/100 (source: ${job.performanceMetrics.source}).`
         : `No PageSpeed score available. ${job.performanceMetrics.fieldDataNotice}`);
 
-      // Stage 3: Remediation planning only. This deployment has no authorized live-site write connector.
+      // Stage 3: Prepare conservative remediation artifacts. GitHub changes are proposed in a PR, never pushed to production directly.
       if (job.autoFixEnabled) {
         job.status = 'remediating';
         job.progress = 75;
-        job.currentStage = 'Preparing candidate remediation snippets for review...';
+        job.currentStage = 'Preparing safe SEO fixes and reviewable source changes...';
         const candidates = job.issues.filter(issue => issue.proposedFix && issue.fixStatus === 'available').length;
-        addLog('info', `Prepared ${candidates} candidate remediation suggestions. No live website files were changed.`);
+        addLog('info', `Prepared ${candidates} candidate remediation suggestions. Safe file changes will be proposed through a GitHub pull request when the repository connector is configured.`);
       }
 
       // Stage 4: Validation
@@ -559,6 +559,14 @@ export class JobManager {
       job.generatedSitemapXml = RemediationEngine.generateCleanSitemap(job.crawledPages, job.targetDomain);
       job.generatedRobotsTxt = RemediationEngine.generateOptimizedRobotsTxt(job.targetDomain, job.sitemapUrl || `${new URL(job.targetUrl).origin}/sitemap.xml`);
       job.generatedRemediationReport = RemediationEngine.generateRemediationReport(job.issues, job.targetDomain);
+
+      // Multi-site safety: do not use a global GitHub token/repository to change a scanned
+      // site. Until the site owner explicitly connects and authorizes their own repository,
+      // only prepare reviewable/downloadable remediation artifacts. Crawling and audit remain
+      // available for any safe public website.
+      if (job.autoFixEnabled) {
+        addLog('info', 'Prepared remediation artifacts for this website. Live repository changes are paused until this site owner connects and authorizes their own GitHub repository; no unrelated repository will be modified.');
+      }
 
       // Stage 5: Google Search Console Submission
       job.status = 'submitting_sitemap';
@@ -581,14 +589,14 @@ export class JobManager {
       // Stage 6: Completion & Stats
       job.status = 'completed';
       job.progress = 100;
-      job.currentStage = 'Technical SEO audit complete; proposed changes are ready for review.';
+      job.currentStage = job.githubPullRequestUrl ? 'Audit complete; safe SEO fixes are ready in a GitHub pull request.' : 'Technical SEO audit complete; proposed changes are ready for review.';
       job.completedAt = new Date().toISOString();
 
       // Compute statistics
       this.refreshSummary(job);
 
       const proposedCount = job.issues.filter(issue => issue.proposedFix).length;
-      addLog('success', `Audit finalized: ${job.summary.criticalCount} Critical, ${job.summary.highCount} High, ${job.summary.mediumCount} Medium issues. ${proposedCount} proposed remediation snippets prepared; no live-site files were changed.`);
+      addLog('success', `Audit finalized: ${job.summary.criticalCount} Critical, ${job.summary.highCount} High, ${job.summary.mediumCount} Medium issues. ${proposedCount} proposed remediation snippets prepared.${job.githubPullRequestUrl ? ' Safe robots.txt and sitemap.xml changes were submitted in a GitHub PR for review.' : ' No live-site files were changed; configure the GitHub connector to generate a reviewable PR for allowlisted sites.'}`);
       this.saveJobsToDisk(job);
       await this.persistJobToSharedStorage(job).catch(e => console.error('Could not persist completed audit job:', e));
     } catch (err: unknown) {
