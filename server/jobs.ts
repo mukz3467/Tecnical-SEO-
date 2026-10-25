@@ -53,7 +53,7 @@ export class JobManager {
       if (error) throw new Error(`Supabase job read failed: ${error.message}`);
       return data?.job as AuditJob | undefined;
     }
-    // Supabase is preferred for durable job records; Blob remains a fallback.\n    // Blob SDK get() requires the blob URL, not its pathname.
+    // Blob SDK get() requires the blob URL, not its pathname.
     // Resolve the private blob URL from the store listing first.
     const pathname = `autoindex/jobs/${id}.json`;
     const listing = await list({ prefix: pathname, limit: 10 });
@@ -123,21 +123,34 @@ export class JobManager {
     if (!this.hasSharedStorage()) return;
     const now = Date.now();
     const last = this.lastBlobPersistAt.get(job.id) || 0;
-    // Keep Blob writes inside the Hobby free allowance during a normal crawl.
-    if (now - last < 8000) return;
+    // Throttle progress snapshots while keeping durable state reasonably fresh.
+    if (now - last < 5000) return;
     this.lastBlobPersistAt.set(job.id, now);
+
+    const supabase = this.getSupabaseClient();
     const previous = this.blobPersistQueue.get(job.id) || Promise.resolve();
     const snapshot = JSON.stringify(job);
     const next = previous.catch(() => undefined).then(async () => {
-      await put(`autoindex/jobs/${job.id}.json`, snapshot, {
-        access: 'private',
-        allowOverwrite: true,
-        contentType: 'application/json',
-        cacheControlMaxAge: 60
-      });
+      if (supabase) {
+        const { error } = await supabase.from('audit_jobs').upsert({
+          id: job.id,
+          job: JSON.parse(snapshot),
+          status: job.status,
+          progress: job.progress,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'id' });
+        if (error) throw new Error(`Supabase job checkpoint failed: ${error.message}`);
+      } else {
+        await put(`autoindex/jobs/${job.id}.json`, snapshot, {
+          access: 'private',
+          allowOverwrite: true,
+          contentType: 'application/json',
+          cacheControlMaxAge: 60
+        });
+      }
     });
     this.blobPersistQueue.set(job.id, next);
-    void next.catch(e => console.error('Could not persist audit job to Vercel Blob:', e));
+    void next.catch(e => console.error('Could not persist audit job checkpoint:', e));
   }
 
   private saveJobsToDisk(jobToPersist?: AuditJob): void {
