@@ -10,7 +10,7 @@ import { CrawledPagesTable } from './components/CrawledPagesTable.tsx';
 import { ArtifactsDownloader } from './components/ArtifactsDownloader.tsx';
 import { SettingsModal } from './components/SettingsModal.tsx';
 import { AuditJob } from './types.ts';
-import { History, AlertCircle } from 'lucide-react';
+import { History, AlertCircle, Search, Globe, ListChecks, Gauge, FileSearch, ArrowUpRight } from 'lucide-react';
 
 export default function App() {
   const [jobs, setJobs] = useState<AuditJob[]>([]);
@@ -159,7 +159,20 @@ export default function App() {
         isProcessing={isPipelineActive}
       />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+        {/* Reference layout: hero, URL audit launcher, quick stats, then tool cards. */}
+        <section className="pt-3 sm:pt-8 pb-1 text-center max-w-3xl mx-auto">
+          <div className="inline-flex items-center gap-2 rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-700">
+            <span className="inline-block h-2 w-2 rounded-full bg-black" />
+            Technical SEO Workspace
+          </div>
+          <h1 className="mt-5 text-3xl sm:text-5xl font-bold tracking-tight text-black leading-tight">
+            Find SEO issues. <span className="text-neutral-500">Fix what matters.</span>
+          </h1>
+          <p className="mt-4 text-sm sm:text-base leading-7 text-neutral-600 max-w-2xl mx-auto">
+            Crawl your website, review technical problems, inspect indexing readiness, and understand performance from one workspace.
+          </p>
+        </section>
         {/* Error notification banner */}
         {errorBanner && (
           <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center justify-between">
@@ -177,10 +190,76 @@ export default function App() {
         )}
 
         {/* 1. Main Launcher Input */}
-        <AuditLauncher
-          onStartAudit={handleStartAudit}
-          isLoading={isStarting || isPipelineActive}
-        />
+        <div id="audit-launcher" className="scroll-mt-24">
+          <AuditLauncher
+            onStartAudit={handleStartAudit}
+            isLoading={isStarting || isPipelineActive}
+          />
+        </div>
+
+        {/* Quick stats */}
+        <section aria-label="Quick audit statistics" className="space-y-3">
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500">Overview</p>
+              <h2 className="mt-1 text-xl font-bold tracking-tight text-black">Quick stats</h2>
+            </div>
+            <span className="text-xs text-neutral-500">{activeJob ? 'Latest audit results' : 'Your stats appear after the first audit'}</span>
+          </div>
+          <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+            <div className="rounded-2xl border border-neutral-200 bg-white p-4 sm:p-5">
+              <div className="flex items-center justify-between gap-2 text-xs text-neutral-500"><span>Pages crawled</span><Globe className="h-4 w-4 text-black" /></div>
+              <p className="mt-3 text-2xl sm:text-3xl font-bold tracking-tight text-black">{activeJob ? activeJob.summary.totalCrawled : '—'}</p>
+              <p className="mt-1 text-[11px] text-neutral-500">{activeJob ? `of ${activeJob.summary.totalDiscovered} discovered` : 'Waiting for a crawl'}</p>
+            </div>
+            <div className="rounded-2xl border border-neutral-200 bg-white p-4 sm:p-5">
+              <div className="flex items-center justify-between gap-2 text-xs text-neutral-500"><span>Issues found</span><ListChecks className="h-4 w-4 text-black" /></div>
+              <p className="mt-3 text-2xl sm:text-3xl font-bold tracking-tight text-black">{activeJob ? activeJob.issues.length : '—'}</p>
+              <p className="mt-1 text-[11px] text-neutral-500">{activeJob ? `${activeJob.summary.criticalCount} critical issues` : 'Evidence-based findings'}</p>
+            </div>
+            <div className="rounded-2xl border border-neutral-200 bg-white p-4 sm:p-5">
+              <div className="flex items-center justify-between gap-2 text-xs text-neutral-500"><span>Indexing checks</span><FileSearch className="h-4 w-4 text-black" /></div>
+              <p className="mt-3 text-2xl sm:text-3xl font-bold tracking-tight text-black">{activeJob ? activeJob.searchConsoleStatus.inspectionSummary.totalInspected : '—'}</p>
+              <p className="mt-1 text-[11px] text-neutral-500">{activeJob ? 'URLs inspected by Google API' : 'Search Console status'}</p>
+            </div>
+            <div className="rounded-2xl border border-neutral-200 bg-white p-4 sm:p-5">
+              <div className="flex items-center justify-between gap-2 text-xs text-neutral-500"><span>Performance score</span><Gauge className="h-4 w-4 text-black" /></div>
+              <p className="mt-3 text-2xl sm:text-3xl font-bold tracking-tight text-black">{typeof activeJob?.performanceMetrics?.score === 'number' ? `${activeJob.performanceMetrics.score}/100` : '—'}</p>
+              <p className="mt-1 text-[11px] text-neutral-500">{activeJob ? 'Latest measured score' : 'Measured during audit'}</p>
+            </div>
+          </div>
+        </section>
+
+        {/* Four tool cards from the generated reference layout. */}
+        <section className="space-y-3" aria-label="Technical SEO tools">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-500">Workspace</p>
+            <h2 className="mt-1 text-xl font-bold tracking-tight text-black">Explore your SEO tools</h2>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            {[
+              { key: 'issues' as const, number: '01', title: 'Technical SEO Audit', description: 'Review crawl errors, metadata, canonical tags, and prioritized fixes.', icon: Search },
+              { key: 'pages' as const, number: '02', title: 'Crawl & URL Analysis', description: 'Explore discovered URLs, response codes, and page-level crawl data.', icon: Globe },
+              { key: 'gsc' as const, number: '03', title: 'Google Indexing', description: 'Check sitemap, robots.txt, Search Console access, and indexing readiness.', icon: FileSearch },
+              { key: 'performance' as const, number: '04', title: 'Performance & CWV', description: 'Review available speed measurements and Core Web Vitals data.', icon: Gauge }
+            ].map(tool => {
+              const ToolIcon = tool.icon;
+              return (
+                <article key={tool.key} className="group flex min-h-[220px] flex-col rounded-2xl border border-neutral-200 bg-white p-5 transition duration-200 hover:-translate-y-0.5 hover:border-neutral-400 hover:shadow-lg hover:shadow-black/[0.04]">
+                  <div className="flex items-center justify-between">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-neutral-200 bg-neutral-50 text-black"><ToolIcon className="h-5 w-5" /></div>
+                    <span className="text-xs font-mono text-neutral-400">{tool.number}</span>
+                  </div>
+                  <h3 className="mt-5 text-base font-bold tracking-tight text-black">{tool.title}</h3>
+                  <p className="mt-2 flex-1 text-xs leading-6 text-neutral-600">{tool.description}</p>
+                  <button type="button" onClick={() => { setActiveTab(tool.key); if (!activeJob) document.getElementById('audit-launcher')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); else document.getElementById('audit-results')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} className="mt-4 inline-flex w-fit items-center gap-2 rounded-lg bg-black px-3 py-2 text-xs font-semibold text-white transition hover:bg-neutral-800">
+                    {activeJob ? 'Open tool' : 'Start with a URL'} <ArrowUpRight className="h-3.5 w-3.5" />
+                  </button>
+                </article>
+              );
+            })}
+          </div>
+        </section>
 
         {/* Job History Selector if multiple jobs */}
         {jobs.length > 1 && (
@@ -211,7 +290,7 @@ export default function App() {
 
         {/* 2. Active Job Details */}
         {activeJob && (
-          <div className="space-y-6">
+          <div id="audit-results" className="scroll-mt-24 space-y-6">
             {/* Live Progress & Status */}
             <LiveProgressCard job={activeJob} />
 
@@ -291,8 +370,8 @@ export default function App() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-slate-900 bg-slate-950 py-6 mt-12 text-center text-xs text-slate-500">
-        <p>AutoIndex AI — Autonomous Technical SEO & Crawling Engine</p>
+      <footer className="border-t border-neutral-200 bg-white py-8 mt-12 text-center text-xs text-neutral-500">
+        <p className="font-semibold text-black">AutoIndex AI — Technical SEO Workspace</p>
         <p className="mt-1 text-[11px] text-slate-400">
           Built strictly in accordance with Google Search Central guidelines, W3C standards, and Chrome UX Report metrics.
         </p>
