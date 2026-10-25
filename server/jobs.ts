@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { waitUntil } from '@vercel/functions';
 import { get, list, put } from '@vercel/blob';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import fs from 'fs';
 import path from 'path';
 import { AuditJob } from './types.ts';
@@ -18,13 +19,41 @@ export class JobManager {
   private jobs = new Map<string, AuditJob>();
   private lastBlobPersistAt = new Map<string, number>();
   private blobPersistQueue = new Map<string, Promise<void>>();
+  private supabaseClient?: SupabaseClient;
 
-  private hasSharedStorage(): boolean {
-    return Boolean(process.env.BLOB_STORE_ID && process.env.VERCEL_OIDC_TOKEN) || Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+  private hasSupabaseStorage(): boolean {
+    return Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
   }
 
-  private async readBlobJob(id: string): Promise<AuditJob | undefined> {
-    // Blob SDK get() requires the blob URL, not its pathname.
+  private getSupabaseClient(): SupabaseClient | undefined {
+    if (!this.hasSupabaseStorage()) return undefined;
+    if (!this.supabaseClient) {
+      this.supabaseClient = createClient(
+        process.env.SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        { auth: { persistSession: false, autoRefreshToken: false } }
+      );
+    }
+    return this.supabaseClient;
+  }
+
+  private hasSharedStorage(): boolean {
+    return this.hasSupabaseStorage() ||
+      (Boolean(process.env.BLOB_STORE_ID && process.env.VERCEL_OIDC_TOKEN) || Boolean(process.env.BLOB_READ_WRITE_TOKEN));
+  }
+
+  private async readSharedJob(id: string): Promise<AuditJob | undefined> {
+    const supabase = this.getSupabaseClient();
+    if (supabase) {
+      const { data, error } = await supabase
+        .from('audit_jobs')
+        .select('job')
+        .eq('id', id)
+        .maybeSingle();
+      if (error) throw new Error(`Supabase job read failed: ${error.message}`);
+      return data?.job as AuditJob | undefined;
+    }
+    // Supabase is preferred for durable job records; Blob remains a fallback.\n    // Blob SDK get() requires the blob URL, not its pathname.
     // Resolve the private blob URL from the store listing first.
     const pathname = `autoindex/jobs/${id}.json`;
     const listing = await list({ prefix: pathname, limit: 10 });
@@ -64,6 +93,18 @@ export class JobManager {
 
   private async persistJobToSharedStorage(job: AuditJob, _addToIndex = false): Promise<void> {
     if (!this.hasSharedStorage()) return;
+    const supabase = this.getSupabaseClient();
+    if (supabase) {
+      const { error } = await supabase.from('audit_jobs').upsert({
+        id: job.id,
+        job,
+        status: job.status,
+        progress: job.progress,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'id' });
+      if (error) throw new Error(`Supabase job write failed: ${error.message}`);
+      return;
+    }
     const snapshot = JSON.stringify(job);
     const previous = this.blobPersistQueue.get(job.id) || Promise.resolve();
     const next = previous.catch(() => undefined).then(async () => {
@@ -113,7 +154,7 @@ export class JobManager {
   public async getJob(id: string): Promise<AuditJob | undefined> {
     if (this.hasSharedStorage()) {
       try {
-        const job = await this.readBlobJob(id);
+        const job = await this.readSharedJob(id);
         if (job) {
           this.jobs.set(id, job);
           return job;
@@ -131,10 +172,20 @@ export class JobManager {
   public async getAllJobs(): Promise<AuditJob[]> {
     if (this.hasSharedStorage()) {
       try {
+        const supabase = this.getSupabaseClient();
+        if (supabase) {
+          const { data, error } = await supabase
+            .from('audit_jobs')
+            .select('job')
+            .order('updated_at', { ascending: false })
+            .limit(50);
+          if (error) throw new Error(`Supabase job history read failed: ${error.message}`);
+          return (data || []).map(row => row.job as AuditJob);
+        }
         const result = await list({ prefix: 'autoindex/jobs/', limit: 50 });
         const jobs = await Promise.all(result.blobs.map(async blob => {
           const id = blob.pathname.split('/').pop()?.replace(/\.json$/, '');
-          return id ? this.readBlobJob(id).catch(() => undefined) : undefined;
+          return id ? this.readSharedJob(id).catch(() => undefined) : undefined;
         }));
         return jobs.filter((job): job is AuditJob => Boolean(job))
           .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
