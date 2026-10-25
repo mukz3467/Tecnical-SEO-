@@ -45,12 +45,12 @@ The app generates a structurally validated sitemap, a conservative robots.txt su
 
 ## Durable audit-job storage (Vercel serverless)
 
-Vercel Functions do not share memory or `/tmp`. The API now supports **Supabase Postgres as the preferred shared job store**, with private Vercel Blob as a fallback. Job snapshots include status, progress, crawled pages, logs, and report data. Progress snapshots are throttled to limit writes.
+Vercel Functions do not share memory or `/tmp`. The API now supports **Supabase Postgres as the preferred shared job store**, with private Vercel Blob as a fallback. Job snapshots use your `seo_audit_jobs` table; individual page snapshots use `crawled_pages`. Each completed page saves the queue, visited URLs, discovered sitemap URLs, and page results to Supabase. A stale active job is claimed with a compare-and-set update when its job detail endpoint is polled, then resumed from the last checkpoint.
 
 ### Supabase setup (recommended)
 
 1. Create a free Supabase project.
-2. In the Supabase SQL Editor, run the migration in `supabase/migrations/202610250001_audit_jobs.sql`.
+2. Since your project already has `seo_audit_jobs` and `crawled_pages`, run `supabase/migrations/202610250002_seo_crawler_tables.sql` to add the job/checkpoint JSON columns and the unique page key. Do not run the older `audit_jobs` migration for this schema.
 3. In Supabase project settings, copy the Project URL and the **service_role** secret key.
 4. In Vercel → `tecnical-seo` → Settings → Environment Variables, add:
    - `SUPABASE_URL` = your Supabase project URL
@@ -66,4 +66,4 @@ If the Supabase environment variables are not configured, the app continues usin
 
 ### Important runtime limitation
 
-Persistent job records prevent independent Vercel instances from losing access to a job's saved state. However, persistence alone does **not** make a running in-memory crawler resumable after a function is forcibly terminated: the crawl queue/visited set and stage execution must be checkpointed and scheduled in bounded worker steps for full crash recovery. This deployment currently persists job snapshots and progress; use a durable queue/worker or a chunked checkpoint worker before treating long crawls as guaranteed to resume after a hard timeout.
+Persistent job records prevent independent Vercel instances from losing access to a job's saved state. However, persistence alone does **not** make a running in-memory crawler resumable after a function is forcibly terminated: the crawl queue/visited set and stage execution must be checkpointed and scheduled in bounded worker steps for full crash recovery. The crawler now restores its persisted queue when a stale job is resumed. Recovery is triggered when the client polls `/api/jobs/:id`; if the browser never polls again, no new invocation is automatically scheduled. As with any serverless system, the page currently in-flight at termination may need to be retried.
