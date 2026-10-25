@@ -1,79 +1,245 @@
-@import "tailwindcss";
+import React, { useState, useEffect, useRef } from 'react';
+import { Header } from './components/Header.tsx';
+import { AuditLauncher } from './components/AuditLauncher.tsx';
+import { LiveProgressCard } from './components/LiveProgressCard.tsx';
+import { SummaryCards } from './components/SummaryCards.tsx';
+import { IssuesTable } from './components/IssuesTable.tsx';
+import { PerformanceCard } from './components/PerformanceCard.tsx';
+import { IndexingReadinessPanel } from './components/IndexingReadinessPanel.tsx';
+import { CrawledPagesTable } from './components/CrawledPagesTable.tsx';
+import { ArtifactsDownloader } from './components/ArtifactsDownloader.tsx';
+import { SettingsModal } from './components/SettingsModal.tsx';
+import { AuditJob } from './types.ts';
+import { Activity, AlertCircle, ArrowRight, ArrowUpRight, BarChart3, CheckCircle2, CircleHelp, Clock3, FileSearch, Gauge, Globe, LayoutDashboard, Link2, ListChecks, LoaderCircle, Search, Settings, ShieldCheck, Sparkles, Zap, Bug, Code2, ChartNoAxesCombined } from 'lucide-react';
 
-:root { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color-scheme: dark; font-synthesis: none; text-rendering: optimizeLegibility; --bg:#020b1a; --panel:#04142b; --panel2:#061a35; --border:#102e52; --muted:#91a9c8; --text:#eaf3ff; --blue:#1267ff; --green:#00d78b; }
-* { box-sizing:border-box; }
-html { scroll-behavior:smooth; background:var(--bg); }
-body,#root { margin:0; min-height:100%; background:var(--bg); color:var(--text); }
-body { font-size:14px; }
-button,input { font:inherit; }
-button { cursor:pointer; }
-button:disabled { opacity:.65; cursor:not-allowed; }
-a { color:inherit; text-decoration:none; }
-.seo-app { background:radial-gradient(ellipse at 55% -10%,#09234a 0,transparent 45%),var(--bg); color:var(--text); min-height:100vh; }
-.seo-sidebar { width:236px; flex:0 0 236px; position:sticky; top:0; height:100vh; display:flex; flex-direction:column; padding:18px 12px 14px; background:#020b18; border-right:1px solid #10233e; z-index:30; }
-.seo-brand { display:flex; align-items:center; gap:10px; padding:4px 7px 22px; min-width:0; }
-.brand-rocket { display:grid; place-items:center; width:38px;height:38px; border-radius:12px; color:#fff; font-size:30px; font-weight:800; background:linear-gradient(145deg,#16e6bd,#1764ff); transform:rotate(-8deg); }
-.seo-brand strong { display:block; font-size:14px; letter-spacing:-.3px; white-space:nowrap; }
-.seo-brand small { display:block; margin-top:3px; color:#8ba3c1; font-size:9px; white-space:nowrap; }
-.seo-nav { display:flex; flex-direction:column; gap:5px; }
-.seo-nav-item { display:flex; align-items:center; gap:12px; width:100%; min-height:39px; padding:0 12px; text-align:left; color:#b6c7dd; background:transparent; border:1px solid transparent; border-radius:9px; font-size:12px; transition:.18s; }
-.seo-nav-item:hover { background:#071b37; color:#fff; }
-.seo-nav-item.active { background:linear-gradient(100deg,#0757ec,#0c48c8); color:white; box-shadow:0 5px 18px #005dff25; }
-.seo-sidebar-promo { margin-top:auto; border:1px solid #125a7d; border-radius:12px; padding:12px; background:radial-gradient(circle at 50% 20%,#06416c,#04142d 70%); }
-.promo-art { display:flex; align-items:center; justify-content:center; gap:20px; height:96px; color:#10e7c4; text-shadow:0 0 24px #08c7ff; }
-.promo-art span { font-size:48px; color:#397aff; }
-.seo-sidebar-promo strong { display:block; font-size:15px; line-height:1.5; }
-.seo-sidebar-promo button { width:100%; margin-top:12px; padding:9px 7px; border:0; border-radius:8px; background:linear-gradient(90deg,#00bb78,#00dc9b); color:#03221e; font-size:11px; font-weight:800; }
-.sidebar-foot { display:flex; align-items:center; gap:7px; color:#7189a8; font-size:10px; padding:17px 5px 0; }
-.live-dot,.status-dot { display:inline-block; width:7px;height:7px; flex:none; border-radius:50%; background:#05d991; box-shadow:0 0 10px #05d99166; }
-.status-dot { background:#f6b544; box-shadow:none; }
-.status-dot.good { background:#05d991; }
-.seo-main-column { min-width:0; flex:1; }
-.seo-main-column > header { position:sticky; top:0; z-index:25; min-height:62px; border-bottom:1px solid #102644; background:#030d1eeb; backdrop-filter:blur(16px); }
-.seo-main-column > header > div { max-width:none!important; height:62px!important; padding-left:24px!important; padding-right:24px!important; }
-.seo-main-column > header a { color:var(--text)!important; }
-.seo-main-column > header a div div span:first-child { color:var(--text)!important; }
-.seo-main-column > header p { color:#8ea7c6!important; }
-.seo-main-column > header button { border:1px solid #1b3d64!important; background:#081b34!important; color:#d9e8ff!important; border-radius:9px!important; }
-.seo-main { max-width:1800px; margin:0 auto; padding:20px 22px 0; }
-.welcome-panel { min-height:174px; display:flex; align-items:center; justify-content:space-between; gap:20px; padding:22px 24px; border:1px solid #112e50; border-radius:15px; background:linear-gradient(110deg,#041329 0%,#04172e 57%,#03172a 100%); box-shadow:0 12px 36px #0002; overflow:hidden; }
-.welcome-copy { flex:1; min-width:0; }
-.eyebrow { display:flex; align-items:center; gap:7px; color:#7f9fc4; font-size:9px; font-weight:800; letter-spacing:1.4px; }
-.welcome-panel h1 { margin:10px 0 4px; font-size:24px; line-height:1.2; letter-spacing:-.7px; color:#f0f7ff; }
-.wave { font-size:20px; }
-.welcome-panel p { margin:0; color:#9bb2ce; font-size:12px; }
-.url-analyze { display:flex; align-items:center; gap:10px; max-width:590px; margin-top:16px; padding:5px 6px 5px 11px; background:#061b35; border:1px solid #21456c; border-radius:9px; color:#8fa8c6; }
-.url-analyze input { flex:1; min-width:0; border:0!important; outline:0; background:transparent!important; color:#e6f1ff!important; font-size:12px; box-shadow:none!important; }
-.url-analyze input::placeholder { color:#7892b2!important; }
-.url-analyze button { display:flex; align-items:center; justify-content:center; gap:7px; padding:10px 13px; border:0; border-radius:7px; color:#00291f; background:linear-gradient(100deg,#00b979,#00df99); font-size:11px; font-weight:800; white-space:nowrap; }
-.welcome-meta { display:flex; flex-wrap:wrap; gap:18px; margin-top:12px; color:#8ea8c8; font-size:10px; }
-.welcome-meta span { display:inline-flex; align-items:center; gap:6px; }
-.good-text { color:#00d894!important; }
-.welcome-visual { width:32%; max-width:390px; min-width:220px; height:125px; display:flex; align-items:center; justify-content:center; position:relative; }
-.rocket-window { width:155px;height:95px; display:flex; align-items:center; justify-content:center; color:#00e6b0; border:2px solid #087e83; border-radius:15px; background:linear-gradient(140deg,#063f52,#061e3a 70%); transform:skew(-12deg); box-shadow:0 0 35px #00d8aa22,inset 0 0 28px #00bcae17; }
-.rocket-window .rocket { position:absolute; top:-23px;right:-28px;font-size:48px; transform:skew(12deg) rotate(-15deg); filter:drop-shadow(0 0 12px #00d7c777); }
-.orbit { position:absolute; border:1px solid #00d8ad44; border-radius:50%; transform:rotate(-20deg); }
-.orbit-one { width:230px;height:85px; }.orbit-two { width:270px;height:112px; }
-.visual-caption { margin-left:18px; display:flex; flex-direction:column; gap:6px; font-size:13px; white-space:nowrap; color:#e1edff; }.visual-caption span { color:#00e5a5; font-size:21px; }
-.audit-launcher-wrap { margin-top:14px; scroll-margin-top:85px; }.audit-launcher-wrap > * { border-color:#123458!important; }
-.metric-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:11px; margin-top:14px; }
-.metric-card { min-width:0; min-height:170px; display:flex; flex-direction:column; padding:13px; border:1px solid #153858; border-radius:13px; background:#04152a; box-shadow:inset 0 1px #ffffff05; }
-.metric-green { border-color:#096a56; background:linear-gradient(145deg,#032b2a,#04172a 80%); }.metric-blue { border-color:#124b88;background:linear-gradient(145deg,#071f47,#04152a 85%); }.metric-purple { border-color:#4931a3;background:linear-gradient(145deg,#1a1247,#06152c 85%); }.metric-amber { border-color:#76501b;background:linear-gradient(145deg,#30200c,#101a2b 90%); }.metric-teal { border-color:#096653;background:linear-gradient(145deg,#032d2b,#04152a 85%); }
-.metric-top { display:flex; align-items:center; gap:8px; min-width:0; font-size:11px; }.metric-top strong { font-weight:750; }.metric-icon { display:grid;place-items:center; width:34px;height:34px;flex:none; border-radius:11px; background:#00b77b;color:#fff;font-weight:900;font-size:23px; }.metric-blue .metric-icon {background:#0878ff}.metric-purple .metric-icon {background:#713dff}.metric-amber .metric-icon {background:#f5a623}.metric-teal .metric-icon {background:#067e66}.metric-symbol { margin-left:auto;color:#00e2a0;font-size:16px; }
-.metric-value { margin-top:11px; font-size:27px; line-height:1.15; font-weight:800; letter-spacing:-.6px; }.metric-value small { display:block; margin-top:5px; font-size:10px; font-weight:400; color:#9bb1cc; letter-spacing:0; }
-.metric-bottom { display:flex; align-items:center; justify-content:space-between; gap:5px; margin-top:auto; padding-top:11px; color:#8ea6c2; font-size:9px; }.metric-bottom button { display:inline-flex;align-items:center;gap:4px;white-space:nowrap; padding:7px 9px;border:1px solid #155a4d;border-radius:7px;background:#006d4c;color:#e8fff7;font-size:9px;font-weight:750; }.metric-blue .metric-bottom button {background:#075bc9;border-color:#126bdf}.metric-purple .metric-bottom button {background:#5931d4;border-color:#6945f1}.metric-amber .metric-bottom button {background:#b87913;border-color:#e29a20;color:#fff}.auto-status {display:flex;align-items:center;gap:7px;margin-top:17px;font-size:12px}.auto-description {font-size:10px!important;line-height:1.5;margin-top:7px!important;color:#9bb1cc!important}
-.score-wrap {display:flex;align-items:center;gap:11px;margin:8px 0 0}.score-ring { --score:0%; width:65px;height:65px;display:grid;place-items:center;flex:none;border-radius:50%;background:conic-gradient(#00e5a4 var(--score),#163657 0);position:relative}.score-ring:before {content:"";position:absolute;inset:6px;border-radius:50%;background:#071735}.score-ring span {z-index:1;font-size:17px;font-weight:800}.score-wrap > div:last-child strong {display:block;color:#00e5a4;font-size:11px}.score-wrap > div:last-child small {display:block;color:#a1b6d0;font-size:9px;margin-top:5px}
-.dashboard-columns { display:grid;grid-template-columns:minmax(0,1.22fr) minmax(0,.88fr) minmax(0,.86fr);gap:12px;margin-top:13px;align-items:start; }.dashboard-left,.dashboard-middle,.dashboard-right { display:flex;flex-direction:column;gap:12px;min-width:0; }
-.panel { min-width:0; border:1px solid #112e50;border-radius:13px;background:linear-gradient(145deg,#04152a,#031126);padding:14px;box-shadow:0 5px 20px #0001; }.panel-heading {display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:12px}.panel-heading h2,.gsc-title h2 {margin:0;font-size:12px;font-weight:800;color:#e9f2ff}.panel-heading p {margin:5px 0 0;font-size:10px;color:#819bb9}.chart-legend {display:flex;flex-wrap:wrap;gap:9px;font-size:9px;color:#9cb1ca}.chart-legend span {display:flex;align-items:center;gap:5px;white-space:nowrap}.chart-legend i {width:7px;height:7px;border-radius:50%;display:inline-block}.legend-green {background:#00dc94}.legend-blue {background:#1685ff}
-.empty-chart {height:180px;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;overflow:hidden;color:#7795b8;text-align:center}.chart-grid {position:absolute;inset:10px 5px 0;display:flex;flex-direction:column;justify-content:space-between;pointer-events:none}.chart-grid span {border-top:1px solid #102945;width:100%}.empty-chart > svg,.empty-chart strong,.empty-chart p,.empty-chart button {position:relative}.empty-chart > svg {color:#167bd4;margin-bottom:8px}.empty-chart strong {font-size:11px;color:#c9d9ee}.empty-chart p {font-size:10px;margin:5px 0 10px;max-width:260px}.empty-chart button {display:flex;align-items:center;gap:5px;background:#075ac8;border:1px solid #1c75e8;color:#fff;padding:7px 10px;border-radius:7px;font-size:10px}.chart-summary {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.chart-summary div {padding:12px;border:1px solid #14304e;border-radius:8px;background:#061b34}.chart-summary small {display:block;color:#8ea6c2;font-size:10px}.chart-summary strong {display:block;margin-top:6px;font-size:22px;color:#00dba0}
-.page-status-list {display:flex;flex-direction:column}.page-status-row {display:flex;align-items:center;gap:9px;padding:10px 0;border-top:1px solid #102744;min-width:0}.page-status-row > svg {color:#00d795;flex:none}.page-status-row > div {flex:1;min-width:0}.page-status-row strong {display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;color:#dceaff}.page-status-row small {display:block;margin-top:3px;font-size:9px;color:#7893b4}.status-pill {flex:none;padding:4px 7px;border-radius:20px;background:#07563f;color:#6effc4;font-size:9px}.text-action {display:flex;align-items:center;gap:3px;border:0;background:transparent;color:#6aaaff;font-size:10px}
-.quick-actions-panel {padding:13px}.quick-actions-panel .panel-heading {margin-bottom:10px}.quick-action {display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;margin-top:6px;padding:8px;border-radius:9px;border:1px solid #194276;background:#061d3a;color:#dbeaff;text-align:left}.quick-action > span {display:flex;align-items:center;gap:9px;min-width:0}.quick-action > svg {flex:none;color:#68aaff}.action-icon {display:grid;place-items:center;width:30px;height:30px;flex:none;border-radius:9px;background:#0a57bb;color:#fff;font-weight:900;font-size:18px}.quick-action strong {display:block;font-size:10px;font-weight:750}.quick-action small {display:block;margin-top:4px;color:#8ea9c9;font-size:9px}.action-cyan {border-color:#145d9a}.action-amber {border-color:#7a5721;background:#211c17}.action-amber .action-icon {background:#d38b17}.action-teal {border-color:#116a6e;background:#041f2e}.action-teal .action-icon {background:#008b9a}.action-green {border-color:#0d7956;background:#04271f}.action-green .action-icon {background:#009966}
-.suggestions-panel {scroll-margin-top:85px}.suggestion-row {display:flex;align-items:flex-start;gap:9px;padding:10px 0;border-top:1px solid #102744}.suggestion-number {display:grid;place-items:center;width:20px;height:20px;flex:none;border-radius:7px;background:#1459c8;color:#fff;font-size:10px;font-weight:800}.sev-critical,.sev-high {background:#a92f3b}.sev-medium {background:#bb801a}.sev-low {background:#166d55}.suggestion-row > div {flex:1;min-width:0}.suggestion-row strong {display:block;font-size:10px;color:#e0ebfa}.suggestion-row small {display:block;margin-top:4px;color:#8ba4c2;font-size:9px;line-height:1.45}.priority-pill {flex:none;padding:3px 6px;border:1px solid #70404b;border-radius:20px;color:#f3a0a8;font-size:8px}
-.gsc-title {display:flex;align-items:center;gap:9px;margin-bottom:16px}.google-g {display:grid;place-items:center;width:31px;height:31px;border-radius:50%;background:#fff;color:#4285f4;font-size:23px;font-weight:900;font-family:Arial,sans-serif}.connected-label,.neutral-label {display:flex;align-items:center;gap:5px;margin-top:6px;color:#00d99a;font-size:9px}.neutral-label {color:#9db1c9}.neutral-label .status-dot {background:#7b91ab}.detail-line {display:flex;align-items:flex-start;gap:9px;margin-top:13px;color:#8ba5c5}.detail-line > svg {flex:none;margin-top:2px}.detail-line small {display:block;font-size:9px;color:#7993b3}.detail-line span {display:block;margin-top:4px;overflow-wrap:anywhere;color:#d7e5f8;font-size:10px;line-height:1.45}.gsc-button {display:flex;align-items:center;justify-content:center;gap:7px;width:100%;margin-top:15px;padding:9px;border:1px solid #1555b1;border-radius:7px;background:#06285b;color:#dceaff;font-size:10px;font-weight:750}
-.recent-row {display:flex;align-items:center;gap:8px;width:100%;padding:10px 0;border:0;border-top:1px solid #102744;background:transparent;color:#dceaff;text-align:left}.recent-check {display:grid;place-items:center;width:22px;height:22px;flex:none;border-radius:50%;background:#123a58;color:#92baff}.recent-check.complete {background:#07553f;color:#3fffc0}.recent-row > span:nth-child(2) {flex:1;min-width:0}.recent-row strong {display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px}.recent-row small {display:block;margin-top:4px;color:#819bb9;font-size:9px}.recent-row > svg {color:#7198c5;flex:none}.empty-state {display:flex;align-items:center;justify-content:center;gap:10px;min-height:90px;color:#8099b8;font-size:10px;line-height:1.5}.empty-state svg {flex:none;color:#4383c7}.empty-state.compact {min-height:55px}
-.auto-seo-banner {display:flex;align-items:center;gap:15px;margin-top:13px;padding:15px;border:1px solid #17426a;border-radius:13px;background:linear-gradient(100deg,#071b35,#04142a 75%);scroll-margin-top:85px}.auto-banner-icon {display:grid;place-items:center;width:44px;height:44px;flex:none;border-radius:12px;background:#152d48;color:#ffd15b}.auto-banner-copy {flex:1;min-width:0}.auto-banner-copy > strong {font-size:12px}.auto-banner-copy p {margin:5px 0 9px;color:#90a9c8;font-size:10px;line-height:1.5}.auto-banner-copy button {display:flex;align-items:center;gap:6px;padding:8px 10px;border:0;border-radius:7px;background:linear-gradient(90deg,#00b878,#00d994);color:#03251e;font-size:10px;font-weight:800}.auto-feature {display:flex;flex-direction:column;align-items:center;gap:5px;min-width:90px;padding:5px;border-left:1px solid #17314f;color:#00d8a0;text-align:center}.auto-feature strong {font-size:9px;color:#dceaff}.auto-feature small {font-size:8px;color:#819bb9}
-.audit-details-section {display:flex;flex-direction:column;gap:14px;margin-top:25px;scroll-margin-top:85px}.detail-section-heading {display:flex;align-items:center;justify-content:space-between}.detail-section-heading h2 {margin:5px 0 0;font-size:21px}.report-status {display:flex;align-items:center;gap:7px;padding:7px 10px;border:1px solid #194466;border-radius:20px;color:#9eb7d5;font-size:10px}.report-tabs {display:flex;gap:5px;overflow:auto;border-bottom:1px solid #17304e;padding-bottom:8px}.report-tabs button {flex:none;padding:9px 12px;border:1px solid transparent;border-radius:8px;background:transparent;color:#91a9c8;font-size:11px}.report-tabs button.selected {background:#0b2850;border-color:#1a4b81;color:#fff}
-.error-banner {display:flex;align-items:center;gap:9px;margin-bottom:12px;padding:12px;border:1px solid #823846;border-radius:9px;background:#30131f;color:#ffc0c9;font-size:11px}.error-banner span {flex:1}.error-banner button {border:0;background:transparent;color:#ffc0c9;font-size:10px}.seo-footer {display:flex;justify-content:space-between;gap:12px;margin-top:20px;padding:18px 3px 20px;border-top:1px solid #112946;color:#8da5c2;font-size:10px}.seo-footer > span {display:flex;align-items:center;gap:7px}.seo-footer small {display:block;color:#617d9f;font-size:9px}.spin {animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
-@media(max-width:1300px){.seo-sidebar{width:205px;flex-basis:205px}.metric-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.dashboard-columns{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.dashboard-right{grid-column:span 2;display:grid;grid-template-columns:1fr 1fr}.welcome-visual{width:28%;min-width:190px}.visual-caption{font-size:11px}}
-@media(max-width:850px){.seo-sidebar{width:64px;flex-basis:64px;padding:12px 7px}.seo-brand{justify-content:center;padding:4px 0 18px}.seo-brand>span:last-child,.seo-nav-item span,.seo-sidebar-promo,.sidebar-foot{display:none}.seo-nav-item{justify-content:center;padding:0;height:42px}.seo-nav-item svg{width:19px;height:19px}.seo-main{padding:14px}.welcome-visual{display:none}.dashboard-columns{grid-template-columns:1fr 1fr}.dashboard-right{grid-column:auto;display:flex}.metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.auto-feature{display:none}.seo-main-column > header > div{padding-left:14px!important;padding-right:14px!important}}
-@media(max-width:560px){.seo-sidebar{width:52px;flex-basis:52px;padding:10px 5px}.seo-nav-item{height:40px;padding:0}.seo-main{padding:10px}.welcome-panel{padding:16px;min-height:0}.welcome-panel h1{font-size:21px}.url-analyze{flex-wrap:wrap}.url-analyze input{min-width:120px}.url-analyze button{padding:9px}.welcome-meta{gap:8px;flex-direction:column}.metric-grid{grid-template-columns:1fr 1fr;gap:8px}.metric-card{padding:10px;min-height:160px}.metric-top{gap:6px;font-size:10px}.metric-icon{width:29px;height:29px}.metric-value{font-size:24px}.metric-bottom{align-items:flex-start;flex-direction:column}.metric-bottom button{margin-top:4px}.score-wrap{gap:7px}.score-ring{width:54px;height:54px}.score-ring span{font-size:14px}.dashboard-columns{grid-template-columns:1fr}.dashboard-right{grid-column:auto}.panel{padding:12px}.seo-footer{flex-direction:column}.detail-section-heading h2{font-size:18px}.report-tabs button{font-size:10px;padding:8px}.seo-main-column > header{position:relative}.seo-main-column > header > div{height:56px!important}.audit-launcher-wrap{overflow:hidden}}
+const navItems = [
+  { label: 'Dashboard', icon: LayoutDashboard, target: 'dashboard' },
+  { label: 'Site Audit', icon: Search, target: 'audit-launcher' },
+  { label: 'Indexing', icon: FileSearch, target: 'audit-results' },
+  { label: 'Crawling', icon: Globe, target: 'audit-results' },
+  { label: 'Keyword Suggestions', icon: Sparkles, target: 'suggestions' },
+  { label: 'Content Optimization', icon: Code2, target: 'suggestions' },
+  { label: 'Backlinks', icon: Link2, target: 'suggestions' },
+  { label: 'Auto SEO', icon: Zap, target: 'auto-seo' },
+  { label: 'Reports', icon: BarChart3, target: 'audit-results' },
+];
+
+export default function App() {
+  const [jobs, setJobs] = useState<AuditJob[]>([]);
+  const [activeJob, setActiveJob] = useState<AuditJob | null>(null);
+  const [isStarting, setIsStarting] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'issues' | 'pages' | 'performance' | 'gsc'>('gsc');
+  const [activeNav, setActiveNav] = useState('Dashboard');
+  const [errorBanner, setErrorBanner] = useState<string | null>(null);
+  const [targetUrl, setTargetUrl] = useState('https://universal-respiratory.vercel.app');
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollFailuresRef = useRef(0);
+
+  const fetchJobs = async () => {
+    try {
+      const res = await fetch('/api/jobs');
+      if (res.ok) {
+        const data: AuditJob[] = await res.json();
+        setJobs(data);
+        setActiveJob(current => current || data[0] || null);
+        if (data[0]?.targetUrl) setTargetUrl(data[0].targetUrl);
+      }
+    } catch { /* API may be unavailable before the first audit. */ }
+  };
+
+  useEffect(() => { fetchJobs(); }, []);
+
+  useEffect(() => {
+    if (!activeJob) return;
+    const running = !['completed', 'failed', 'cancelled'].includes(activeJob.status);
+    if (running) {
+      pollingRef.current = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/jobs/${activeJob.id}`);
+          if (!res.ok) {
+            pollFailuresRef.current += 1;
+            if (res.status === 404) {
+              const msg = 'Audit progress could not be retrieved from the server. This deployment may need shared persistent job storage.';
+              setErrorBanner(msg);
+              setActiveJob(prev => prev && prev.id === activeJob.id ? { ...prev, status: 'failed', error: msg } : prev);
+              return;
+            }
+            if (pollFailuresRef.current >= 3) setErrorBanner(`Unable to read audit progress (HTTP ${res.status}).`);
+            return;
+          }
+          pollFailuresRef.current = 0;
+          const updated: AuditJob = await res.json();
+          setActiveJob(updated);
+          setJobs(prev => prev.map(j => j.id === updated.id ? updated : j));
+        } catch {
+          pollFailuresRef.current += 1;
+          if (pollFailuresRef.current >= 3) setErrorBanner('Network error while checking audit progress. Check your connection.');
+        }
+      }, 1200);
+    } else if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    };
+  }, [activeJob?.id, activeJob?.status]);
+
+  const handleStartAudit = async (params: {
+    targetUrl: string; sitemapUrl?: string; customUrls?: string[];
+    autoFixEnabled: boolean; connectedSourceMode: AuditJob['connectedSourceMode'];
+  }) => {
+    setIsStarting(true); setErrorBanner(null); setTargetUrl(params.targetUrl);
+    try {
+      const res = await fetch('/api/jobs', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(params)
+      });
+      const body = await res.text();
+      let data: any = null;
+      try { data = body ? JSON.parse(body) : null; } catch { /* handled below */ }
+      if (!res.ok) throw new Error(`Could not start audit (HTTP ${res.status}): ${data?.error || body.slice(0, 250) || 'Unknown server error'}`);
+      if (!data?.id) throw new Error('Audit API returned an invalid response.');
+      setActiveJob(data as AuditJob);
+      setJobs(prev => [data as AuditJob, ...prev]);
+      setActiveTab('gsc');
+      document.getElementById('audit-results')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (err) {
+      setErrorBanner(err instanceof Error ? err.message : String(err));
+    } finally { setIsStarting(false); }
+  };
+
+  const running = activeJob ? !['completed', 'failed', 'cancelled'].includes(activeJob.status) : false;
+  const crawled = activeJob?.summary.totalCrawled ?? null;
+  const discovered = activeJob?.summary.totalDiscovered ?? null;
+  const issueCount = activeJob?.issues.length ?? null;
+  const criticalCount = activeJob?.summary.criticalCount ?? null;
+  const inspected = activeJob?.searchConsoleStatus.inspectionSummary.totalInspected ?? null;
+  const health = typeof activeJob?.performanceMetrics?.score === 'number' ? activeJob.performanceMetrics.score : null;
+  const pages = activeJob?.crawledPages ?? [];
+  const suggestions = activeJob?.issues.slice(0, 5) ?? [];
+  const scrollTo = (id: string, label?: string) => {
+    if (label) setActiveNav(label);
+    if (id === 'audit-results') setActiveTab(label === 'Indexing' ? 'gsc' : label === 'Crawling' ? 'pages' : label === 'Reports' ? 'issues' : activeTab);
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  return (
+    <div id="dashboard" className="seo-app min-h-screen flex font-sans">
+      <aside className="seo-sidebar">
+        <a href="#dashboard" className="seo-brand">
+          <span className="brand-rocket">↗</span>
+          <span><strong>Universal Respiratory</strong><small>Make Your Website Reach Everyone</small></span>
+        </a>
+        <nav className="seo-nav" aria-label="Main navigation">
+          {navItems.map(item => {
+            const Icon = item.icon;
+            return <button key={item.label} className={`seo-nav-item ${activeNav === item.label ? 'active' : ''}`} onClick={() => scrollTo(item.target, item.label)}>
+              <Icon size={17} /><span>{item.label}</span>
+            </button>;
+          })}
+          <button className="seo-nav-item" onClick={() => setIsSettingsOpen(true)}><Settings size={17}/><span>Settings</span></button>
+        </nav>
+        <div className="seo-sidebar-promo">
+          <div className="promo-art"><Zap size={42}/><span>↑</span></div>
+          <strong>Rank Higher<br/>Get More Traffic<br/>Grow Your Business</strong>
+          <button onClick={() => scrollTo('auto-seo')}>✦ Explore Auto SEO</button>
+        </div>
+        <div className="sidebar-foot"><span className="live-dot"/> SEO tools workspace</div>
+      </aside>
+
+      <div className="seo-main-column">
+        <Header onOpenSettings={() => setIsSettingsOpen(true)} activeJobId={activeJob?.id} isProcessing={running}/>
+        <main className="seo-main">
+          {errorBanner && <div className="error-banner"><AlertCircle size={17}/><span>{errorBanner}</span><button onClick={() => setErrorBanner(null)}>Dismiss</button></div>}
+
+          <section className="welcome-panel">
+            <div className="welcome-copy">
+              <div className="eyebrow"><span className="live-dot"/> TECHNICAL SEO CONTROL CENTER</div>
+              <h1>Welcome Back! <span className="wave">👋</span></h1>
+              <p>Your website performance at a glance. Keep optimizing for even better results.</p>
+              <form className="url-analyze" onSubmit={e => { e.preventDefault(); scrollTo('audit-launcher', 'Site Audit'); }}>
+                <Search size={17}/><input aria-label="Website URL" value={targetUrl} onChange={e => setTargetUrl(e.target.value)} placeholder="Enter your website URL"/>
+                <button type="submit" disabled={isStarting || running}>{isStarting || running ? <LoaderCircle className="spin" size={16}/> : <ChartNoAxesCombined size={16}/>} Analyze Site</button>
+              </form>
+              <div className="welcome-meta">
+                <span><Clock3 size={13}/> {activeJob ? `Last audit: ${new Date(activeJob.startedAt).toLocaleString()}` : 'No audit run yet'}</span>
+                <span className={activeJob?.status === 'completed' ? 'good-text' : ''}><span className={`status-dot ${activeJob?.status === 'completed' ? 'good' : ''}`}/>{activeJob?.status === 'completed' ? 'Latest audit completed' : running ? 'Audit in progress' : activeJob ? activeJob.status : 'Awaiting first audit'}</span>
+              </div>
+            </div>
+            <div className="welcome-visual" aria-hidden="true"><div className="orbit orbit-one"/><div className="orbit orbit-two"/><div className="rocket-window"><ChartNoAxesCombined size={72}/><span className="rocket">🚀</span></div><div className="visual-caption"><strong>Better SEO</strong><strong>Bigger Opportunities <span>↗</span></strong></div></div>
+          </section>
+
+          <div id="audit-launcher" className="audit-launcher-wrap"><AuditLauncher onStartAudit={handleStartAudit} isLoading={isStarting || running}/></div>
+
+          <section className="metric-grid" aria-label="SEO overview metrics">
+            <article className="metric-card metric-green"><div className="metric-top"><span className="metric-icon">G</span><strong>Indexing</strong><span className="metric-symbol">↗</span></div><div className="metric-value">{inspected === null ? '—' : inspected}<small>{inspected === null ? 'Not checked' : 'URLs inspected'}</small></div><div className="metric-bottom"><span>{activeJob ? 'Google API inspection count' : 'Run an audit to populate'}</span><button onClick={() => scrollTo('audit-results','Indexing')}>View Details <ArrowRight size={14}/></button></div></article>
+            <article className="metric-card metric-blue"><div className="metric-top"><span className="metric-icon"><Bug size={21}/></span><strong>Crawling</strong><span className="metric-symbol">↗</span></div><div className="metric-value">{crawled === null ? '—' : crawled}<small>{discovered === null ? 'Pages crawled' : `of ${discovered} discovered`}</small></div><div className="metric-bottom"><span>{activeJob ? 'Latest crawl results' : 'No crawl data yet'}</span><button onClick={() => scrollTo('audit-results','Crawling')}>View Details <ArrowRight size={14}/></button></div></article>
+            <article className="metric-card metric-purple"><div className="metric-top"><span className="metric-icon"><ShieldCheck size={21}/></span><strong>Health Score</strong><span className="metric-symbol">◈</span></div><div className="score-wrap"><div className="score-ring" style={{'--score': `${health ?? 0}%`} as React.CSSProperties}><span>{health === null ? '—' : `${health}%`}</span></div><div><strong>{health === null ? 'Not measured' : health >= 90 ? 'Excellent' : health >= 70 ? 'Good' : 'Needs work'}</strong><small>{health === null ? 'Run performance audit' : 'Measured score'}</small></div></div><div className="metric-bottom"><span>{health === null ? 'No fabricated score' : 'Latest available measurement'}</span><button onClick={() => scrollTo('audit-results','Reports')}>View Report <ArrowRight size={14}/></button></div></article>
+            <article className="metric-card metric-amber"><div className="metric-top"><span className="metric-icon"><AlertCircle size={21}/></span><strong>Issues Found</strong><span className="metric-symbol">!</span></div><div className="metric-value">{issueCount === null ? '—' : issueCount}<small>{criticalCount === null ? 'Suggestions to fix' : `${criticalCount} critical issues`}</small></div><div className="metric-bottom"><span>{activeJob ? 'Prioritized audit findings' : 'Waiting for site audit'}</span><button onClick={() => scrollTo('audit-results','Reports')}>View Issues <ArrowRight size={14}/></button></div></article>
+            <article className="metric-card metric-teal"><div className="metric-top"><span className="metric-icon"><Zap size={21}/></span><strong>Auto SEO</strong><span className="metric-symbol">✦</span></div><div className="auto-status"><span className="status-dot"/><strong>Ready to configure</strong></div><p className="auto-description">Review suggested improvements before applying changes.</p><div className="metric-bottom"><span>Manual review recommended</span><button onClick={() => scrollTo('auto-seo')}>Manage <ArrowRight size={14}/></button></div></article>
+          </section>
+
+          <section className="dashboard-columns">
+            <div className="dashboard-left">
+              <article className="panel performance-panel">
+                <div className="panel-heading"><div><h2>Performance Overview</h2><p>Latest crawl data and progress</p></div><div className="chart-legend"><span><i className="legend-green"/> Indexed / verified</span><span><i className="legend-blue"/> Crawled</span></div></div>
+                {activeJob && pages.length ? <div className="chart-summary"><div><small>Discovered URLs</small><strong>{discovered ?? '—'}</strong></div><div><small>Crawled URLs</small><strong>{crawled ?? '—'}</strong></div><div><small>Audit issues</small><strong>{issueCount ?? '—'}</strong></div><div><small>Critical</small><strong>{criticalCount ?? '—'}</strong></div></div> : <div className="empty-chart"><div className="chart-grid"><span/><span/><span/><span/><span/></div><ChartNoAxesCombined size={34}/><strong>Performance history will appear here</strong><p>Run a site audit to view actual crawl and performance measurements.</p><button onClick={() => scrollTo('audit-launcher','Site Audit')}>Start Site Audit <ArrowRight size={14}/></button></div>}
+              </article>
+              <article className="panel page-status-panel">
+                <div className="panel-heading"><div><h2>Page Status</h2><p>URLs found in the latest crawl</p></div><button className="text-action" onClick={() => scrollTo('audit-results','Crawling')}>View All <ArrowUpRight size={14}/></button></div>
+                {pages.length ? <div className="page-status-list">{pages.slice(0,5).map((page:any, i:number) => <div className="page-status-row" key={page.url || i}><CheckCircle2 size={17}/><div><strong>{page.url || page.path || `Page ${i+1}`}</strong><small>{page.title || page.statusCode || 'Crawled URL'}</small></div><span className="status-pill">{page.statusCode || page.status || 'Crawled'}</span></div>)}</div> : <div className="empty-state"><Globe size={22}/><span>Page statuses appear after a crawl completes.</span></div>}
+              </article>
+            </div>
+
+            <div className="dashboard-middle">
+              <article className="panel quick-actions-panel"><div className="panel-heading"><div><h2>Quick Actions</h2><p>Jump straight into a task</p></div></div>
+                <button className="quick-action action-blue" onClick={() => scrollTo('audit-results','Indexing')}><span><span className="action-icon">G</span><span><strong>Request / Check Indexing</strong><small>Review available Google indexing data</small></span></span><ArrowRight size={17}/></button>
+                <button className="quick-action action-cyan" onClick={() => scrollTo('audit-launcher','Site Audit')}><span><span className="action-icon"><Search size={18}/></span><span><strong>Run Site Audit</strong><small>Check technical SEO issues and health</small></span></span><ArrowRight size={17}/></button>
+                <button className="quick-action action-amber" onClick={() => scrollTo('suggestions')}><span><span className="action-icon"><Sparkles size={18}/></span><span><strong>Get Suggestions</strong><small>Prioritize evidence-based improvements</small></span></span><ArrowRight size={17}/></button>
+                <button className="quick-action action-teal" onClick={() => scrollTo('suggestions')}><span><span className="action-icon"><Code2 size={18}/></span><span><strong>Optimize Content</strong><small>Review page titles and metadata</small></span></span><ArrowRight size={17}/></button>
+                <button className="quick-action action-green" onClick={() => scrollTo('auto-seo')}><span><span className="action-icon"><Zap size={18}/></span><span><strong>Auto SEO</strong><small>Review automated workflow options</small></span></span><ArrowRight size={17}/></button>
+              </article>
+              <article id="suggestions" className="panel suggestions-panel"><div className="panel-heading"><div><h2>Top SEO Suggestions</h2><p>Issues from the latest audit</p></div><Sparkles size={18}/></div>
+                {suggestions.length ? suggestions.map((issue:any, i:number) => <div className="suggestion-row" key={issue.id || issue.title || i}><span className={`suggestion-number sev-${String(issue.severity || 'medium').toLowerCase()}`}>{i+1}</span><div><strong>{issue.title || issue.type || 'Technical SEO issue'}</strong><small>{issue.description || issue.recommendation || 'Review the finding in the audit report.'}</small></div><span className="priority-pill">{issue.severity || 'Review'}</span></div>) : <div className="empty-state"><CircleHelp size={22}/><span>Run an audit to get prioritized recommendations based on real findings.</span></div>}
+              </article>
+            </div>
+
+            <div className="dashboard-right">
+              <article className="panel gsc-panel"><div className="gsc-title"><span className="google-g">G</span><div><h2>Google Search Console</h2><span className={activeJob?.searchConsoleStatus ? 'connected-label' : 'neutral-label'}><span className="status-dot"/>{activeJob?.searchConsoleStatus ? 'Status returned by audit' : 'Connection not verified'}</span></div></div>
+                <div className="detail-line"><Globe size={14}/><div><small>Property / target</small><span>{activeJob?.targetUrl || targetUrl || 'Not configured'}</span></div></div>
+                <div className="detail-line"><ShieldCheck size={14}/><div><small>Indexing checks</small><span>{inspected === null ? 'Not available yet' : `${inspected} URL(s) inspected`}</span></div></div>
+                <div className="detail-line"><Clock3 size={14}/><div><small>Latest audit</small><span>{activeJob ? new Date(activeJob.startedAt).toLocaleString() : 'No audit yet'}</span></div></div>
+                <button className="gsc-button" onClick={() => scrollTo('audit-results','Indexing')}>View Indexing Report <ArrowUpRight size={14}/></button>
+              </article>
+              <article className="panel recent-panel"><div className="panel-heading"><div><h2>Recent Audit Runs</h2><p>Latest saved jobs</p></div></div>
+                {jobs.length ? jobs.slice(0,5).map(job => <button className="recent-row" key={job.id} onClick={() => {setActiveJob(job); scrollTo('audit-results','Reports');}}><span className={`recent-check ${job.status === 'completed' ? 'complete' : ''}`}>{job.status === 'completed' ? <CheckCircle2 size={15}/> : <Activity size={15}/>}</span><span><strong>{job.targetDomain || job.targetUrl}</strong><small>{job.status} · {new Date(job.startedAt).toLocaleDateString()}</small></span><ArrowUpRight size={14}/></button>) : <div className="empty-state compact"><Clock3 size={20}/><span>No saved audit requests yet.</span></div>}
+              </article>
+            </div>
+          </section>
+
+          <section id="auto-seo" className="auto-seo-banner"><div className="auto-banner-icon"><Zap size={30}/></div><div className="auto-banner-copy"><strong>Technical SEO, organized for you</strong><p>Run evidence-based audits, monitor crawl findings, and review recommendations. Changes are not applied automatically unless a supported integration explicitly performs them.</p><button onClick={() => scrollTo('audit-launcher','Site Audit')}>Run a fresh SEO audit <ArrowRight size={15}/></button></div><div className="auto-feature"><ShieldCheck size={20}/><strong>Verified findings</strong><small>Audit-derived data</small></div><div className="auto-feature"><Sparkles size={20}/><strong>Smart suggestions</strong><small>Prioritized issues</small></div><div className="auto-feature"><Activity size={20}/><strong>Monitoring</strong><small>Latest saved runs</small></div></section>
+
+          {activeJob && <div id="audit-results" className="audit-details-section">
+            <div className="detail-section-heading"><div><span className="eyebrow">AUDIT DETAILS</span><h2>Latest Technical SEO Report</h2></div><span className="report-status"><span className="status-dot"/>{activeJob.status}</span></div>
+            <LiveProgressCard job={activeJob}/>
+            <SummaryCards job={activeJob}/>
+            <div className="report-tabs">
+              {([{id:'issues',label:`Issues & Remediation (${activeJob.issues.length})`},{id:'pages',label:`Crawled URLs (${activeJob.crawledPages.length})`},{id:'performance',label:'Core Web Vitals & Speed'},{id:'gsc',label:'Search Console & Indexing'}] as const).map(tab => <button key={tab.id} className={activeTab===tab.id?'selected':''} onClick={() => setActiveTab(tab.id)}>{tab.label}</button>)}
+            </div>
+            {activeTab==='issues' && <IssuesTable issues={activeJob.issues}/>}
+            {activeTab==='pages' && <CrawledPagesTable pages={activeJob.crawledPages}/>}
+            {activeTab==='performance' && <PerformanceCard metrics={activeJob.performanceMetrics}/>}
+            {activeTab==='gsc' && <IndexingReadinessPanel job={activeJob}/>}
+            <ArtifactsDownloader job={activeJob}/>
+          </div>}
+          <footer className="seo-footer"><span>✦ Universal Respiratory <small>SEO tools for a better tomorrow</small></span><span><i className="live-dot"/> Dashboard ready · Made for your success</span></footer>
+        </main>
+      </div>
+      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)}/>
+    </div>
+  );
+}
+
+.single-page-view{min-height:calc(100vh - 145px);padding:8px 0 28px}.page-view-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:5px 0 20px;padding:22px;border:1px solid #123153;border-radius:14px;background:linear-gradient(110deg,#061a34,#041226)}.page-view-heading h1{margin:9px 0 5px;font-size:26px;color:#eff7ff}.page-view-heading p,.page-intro-card p{margin:0;color:#92aaca;font-size:12px;line-height:1.6}.page-back-button{display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid #1b4774;border-radius:8px;background:#08264a;color:#dceaff;font-size:11px}.page-intro-card{padding:18px;margin-bottom:14px;border:1px solid #123153;border-radius:12px;background:#04152a}.page-intro-card h2{margin:0 0 7px;font-size:16px}.section-empty{min-height:190px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:24px;border:1px dashed #1a3d60;border-radius:12px;background:#04152a;color:#89a5c6;text-align:center}.section-empty svg{color:#36a5ff}.section-empty strong{color:#e5f0ff;font-size:14px}.section-empty span{max-width:540px;font-size:11px;line-height:1.6}.section-empty button,.metric-link{padding:9px 13px;border:1px solid #1266d5;border-radius:8px;background:#0758b8;color:#fff;font-size:11px;font-weight:700}.metric-link{margin-top:auto;align-self:flex-start}.metric-card{gap:10px}.seo-brand{border:0;background:transparent;color:inherit;text-align:left;cursor:pointer}.quick-action{width:100%;text-align:left}.report-tabs{display:flex;gap:5px;overflow:auto;margin:16px 0}.single-page-view .panel{margin-bottom:14px}@media(max-width:560px){.page-view-heading{align-items:flex-start;flex-direction:column;padding:16px}.page-view-heading h1{font-size:22px}.page-back-button{width:100%;justify-content:center}}
