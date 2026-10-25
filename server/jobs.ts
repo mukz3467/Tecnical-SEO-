@@ -5,7 +5,7 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import fs from 'fs';
 import path from 'path';
 import { AuditJob } from './types.ts';
-import { TechnicalSeoCrawler } from './crawler.ts';
+import { TechnicalSeoCrawler, CrawlCheckpoint } from './crawler.ts';
 import { TechnicalSeoAuditor } from './audit.ts';
 import { analyzePerformance } from './pagespeed.ts';
 import { GoogleSearchConsoleIntegration } from './gsc.ts';
@@ -20,6 +20,7 @@ export class JobManager {
   private lastBlobPersistAt = new Map<string, number>();
   private blobPersistQueue = new Map<string, Promise<void>>();
   private supabaseClient?: SupabaseClient;
+  private activePipelines = new Set<string>();
 
   private hasSupabaseStorage(): boolean {
     return Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
@@ -55,11 +56,14 @@ export class JobManager {
     if (supabase) {
       const { data, error } = await supabase
         .from('seo_audit_jobs')
-        .select('job')
+        .select('job,checkpoint,updated_at')
         .eq('id', id)
         .maybeSingle();
       if (error) throw new Error(`Supabase job read failed: ${error.message}`);
-      return data?.job as AuditJob | undefined;
+      if (!data?.job || Object.keys(data.job).length === 0) return undefined;
+      const job = data.job as AuditJob;
+      if (data.checkpoint && Object.keys(data.checkpoint).length > 0) job.crawlCheckpoint = data.checkpoint as CrawlCheckpoint;
+      return job;
     }
     // Blob SDK get() requires the blob URL, not its pathname.
     // Resolve the private blob URL from the store listing first.
@@ -107,6 +111,7 @@ export class JobManager {
         id: job.id,
         target_url: job.targetUrl,
         job,
+        checkpoint: job.crawlCheckpoint || {},
         status: job.status,
         progress: job.progress,
         crawled_pages: job.crawledPages?.length || 0,
@@ -174,6 +179,7 @@ export class JobManager {
           id: job.id,
           target_url: job.targetUrl,
           job: snapshotJob,
+          checkpoint: snapshotJob.crawlCheckpoint || {},
           status: job.status,
           progress: job.progress,
           crawled_pages: job.crawledPages?.length || 0,
@@ -212,12 +218,56 @@ export class JobManager {
     if (jobToPersist) this.queueSharedPersist(jobToPersist);
   }
 
+  private async resumeIfStale(id: string): Promise<void> {
+    const supabase = this.getSupabaseClient();
+    if (!supabase || this.activePipelines.has(id)) return;
+    const { data, error } = await supabase
+      .from('seo_audit_jobs')
+      .select('job,checkpoint,updated_at,status')
+      .eq('id', id)
+      .maybeSingle();
+    if (error || !data?.job || !data.updated_at) return;
+    const resumable = ['queued', 'crawling', 'auditing', 'remediating', 'validating', 'submitting_sitemap'].includes(data.status);
+    const staleForMs = Date.now() - new Date(data.updated_at).getTime();
+    if (!resumable || staleForMs < 20000) return;
+
+    // Compare-and-set the timestamp so only one serverless instance claims recovery.
+    const claimedAt = new Date().toISOString();
+    const claim = await supabase
+      .from('seo_audit_jobs')
+      .update({ updated_at: claimedAt })
+      .eq('id', id)
+      .eq('updated_at', data.updated_at)
+      .select('id')
+      .maybeSingle();
+    if (claim.error || !claim.data || this.activePipelines.has(id)) return;
+
+    const job = data.job as AuditJob;
+    if (data.checkpoint && Object.keys(data.checkpoint).length > 0) job.crawlCheckpoint = data.checkpoint as CrawlCheckpoint;
+    job.logs = Array.isArray(job.logs) ? job.logs : [];
+    job.logs.push({
+      timestamp: claimedAt,
+      level: 'warn',
+      message: 'Recovered stale serverless job from its last persisted crawler checkpoint.'
+    });
+    this.jobs.set(id, job);
+    this.activePipelines.add(id);
+    void this.runJobPipeline(job)
+      .catch(async err => {
+        job.status = 'failed';
+        job.error = err instanceof Error ? err.message : String(err);
+        await this.persistJobToSharedStorage(job).catch(e => console.error('Could not persist recovered job failure:', e));
+      })
+      .finally(() => this.activePipelines.delete(id));
+  }
+
   public async getJob(id: string): Promise<AuditJob | undefined> {
     if (this.hasSharedStorage()) {
       try {
         const job = await this.readSharedJob(id);
         if (job) {
           this.jobs.set(id, job);
+          await this.resumeIfStale(id).catch(e => console.error('Stale job recovery check failed:', e));
           return job;
         }
         return undefined;
@@ -352,6 +402,7 @@ export class JobManager {
     }
 
     // Keep background work alive after the response in Vercel's function runtime.
+    this.activePipelines.add(job.id);
     const pipeline = this.runJobPipeline(job).catch(async err => {
       job.status = 'failed';
       job.error = err instanceof Error ? err.message : String(err);
@@ -362,7 +413,7 @@ export class JobManager {
       });
       this.saveJobsToDisk(job);
       await this.persistJobToSharedStorage(job).catch(e => console.error('Could not persist failed audit job:', e));
-    });
+    }).finally(() => this.activePipelines.delete(job.id));
 
     if (process.env.VERCEL === '1') {
       waitUntil(pipeline);
@@ -394,19 +445,29 @@ export class JobManager {
         delayMs: 250
       });
 
-      const crawlResult = await crawler.runCrawl((progress, stage, message) => {
-        job.progress = progress;
-        job.status = stage === 'crawling' ? 'crawling' : job.status;
-        job.currentStage = message;
-        // Persist each reported stage, not just the final result. This helps recover
-        // the latest known progress after a warm-instance restart (shared storage is
-        // still required for consistent state across independent serverless instances).
-        this.saveJobsToDisk(job);
-        if (progress % 10 === 0) {
-          addLog('info', message);
+      const crawlResult = await crawler.runCrawl(
+        (progress, stage, message) => {
+          job.progress = progress;
+          job.status = stage === 'crawling' ? 'crawling' : job.status;
+          job.currentStage = message;
           this.saveJobsToDisk(job);
-        }
-      });
+          if (progress % 10 === 0) {
+            addLog('info', message);
+            this.saveJobsToDisk(job);
+          }
+        },
+        async (checkpoint: CrawlCheckpoint) => {
+          // Await every page checkpoint: a forced Vercel termination should only lose
+          // the currently in-flight page, not the queue and all completed pages.
+          job.crawlCheckpoint = checkpoint;
+          job.crawledPages = checkpoint.crawledPages;
+          job.sitemapInfo = checkpoint.sitemapInfo;
+          job.robotsTxtInfo = checkpoint.robotsTxtInfo;
+          await this.persistJobToSharedStorage(job);
+        },
+        job.crawlCheckpoint
+      );
+      job.crawlCheckpoint = undefined;
 
       job.crawledPages = crawlResult.crawledPages;
       job.sitemapInfo = crawlResult.sitemapInfo;
