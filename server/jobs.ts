@@ -239,7 +239,7 @@ export class JobManager {
       const resumable = ['queued', 'crawling', 'auditing', 'remediating', 'validating', 'submitting_sitemap'].includes(data.status);
       updatedAt = data.updated_at;
       if (!resumable) return;
-      const staleForMs = Date.now() - new Date(updatedAt).getTime();
+      const staleForMs = Date.now() - new Date(data.updated_at).getTime();
       if (staleForMs < 20000) return;
 
       // Compare-and-set the timestamp so only one Supabase-backed instance claims recovery.
@@ -361,7 +361,7 @@ export class JobManager {
     customUrls?: string[];
     autoFixEnabled?: boolean;
     connectedSourceMode?: AuditJob['connectedSourceMode'];
-  }): AuditJob {
+  }): Promise<AuditJob> {
     if (process.env.VERCEL === '1' && !this.hasSharedStorage()) {
       throw new Error('Shared audit storage is not configured on Vercel. Add SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Vercel Environment Variables, run the Supabase audit_jobs migration, then redeploy.');
     }
