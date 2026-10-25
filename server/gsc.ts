@@ -16,34 +16,65 @@ function normalizePrivateKey(value: string): string {
   if ((key.startsWith('"') && key.endsWith('"')) || (key.startsWith("'") && key.endsWith("'"))) {
     key = key.slice(1, -1);
   }
-  // Vercel env vars may contain real line breaks or escaped \\n sequences.
+  // Handle real CRLFs and one or more levels of escaped newlines from JSON/env panels.
   return key
-    .replace(/\\r\\n/g, '\n')
-    .replace(/\\n/g, '\n')
+    .replace(/\\+r\\+n/g, '\n')
+    .replace(/\\+n/g, '\n')
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n')
     .trim();
 }
 
+function isUsablePrivateKey(value: string): boolean {
+  try {
+    createPrivateKey({ key: normalizePrivateKey(value), format: 'pem' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function getServiceAccount(): ServiceAccount | undefined {
   const raw = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+  let jsonAccount: ServiceAccount | undefined;
+  let jsonKeyError = false;
+
   if (raw) {
-    let parsed: ServiceAccount;
     try {
-      parsed = JSON.parse(raw) as ServiceAccount;
+      const parsed = JSON.parse(raw) as ServiceAccount;
+      if (parsed.client_email && parsed.private_key) {
+        const privateKey = normalizePrivateKey(parsed.private_key);
+        if (isUsablePrivateKey(privateKey)) {
+          jsonAccount = { ...parsed, private_key: privateKey, token_uri: parsed.token_uri || TOKEN_URL };
+        } else {
+          jsonKeyError = true;
+        }
+      } else {
+        jsonKeyError = true;
+      }
     } catch {
-      throw new Error('GOOGLE_SERVICE_ACCOUNT_JSON must contain valid service-account JSON.');
+      jsonKeyError = true;
     }
-    if (!parsed.client_email || !parsed.private_key) {
-      throw new Error('GOOGLE_SERVICE_ACCOUNT_JSON is missing client_email or private_key.');
-    }
-    return { ...parsed, private_key: normalizePrivateKey(parsed.private_key), token_uri: parsed.token_uri || TOKEN_URL };
   }
 
-  const clientEmail = process.env.GOOGLE_SEARCH_CONSOLE_CLIENT_EMAIL;
+  // Prefer the complete JSON credential when valid, but do not let a stale/bad JSON
+  // secret prevent use of a separately configured valid email + PEM pair.
+  if (jsonAccount) return jsonAccount;
+
+  const clientEmail = process.env.GOOGLE_SEARCH_CONSOLE_CLIENT_EMAIL?.trim();
   const privateKeyRaw = process.env.GOOGLE_SEARCH_CONSOLE_PRIVATE_KEY;
   const privateKey = privateKeyRaw ? normalizePrivateKey(privateKeyRaw) : undefined;
-  if (clientEmail && privateKey) return { client_email: clientEmail, private_key: privateKey, token_uri: TOKEN_URL };
+  if (clientEmail && privateKey && isUsablePrivateKey(privateKey)) {
+    return { client_email: clientEmail, private_key: privateKey, token_uri: TOKEN_URL };
+  }
+
+  if (raw || clientEmail || privateKeyRaw) {
+    throw new Error(
+      'Google service-account credentials were found, but no valid PEM private key could be parsed. Set GOOGLE_SERVICE_ACCOUNT_JSON to the unmodified downloaded service-account JSON, or set GOOGLE_SEARCH_CONSOLE_CLIENT_EMAIL plus only the private_key field in GOOGLE_SEARCH_CONSOLE_PRIVATE_KEY. Preserve the full BEGIN/END PEM lines. ' +
+      (jsonKeyError ? 'The JSON credential was also invalid or missing its required fields. ' : '') +
+      'Do not share the private key in chat or logs.'
+    );
+  }
   return undefined;
 }
 
