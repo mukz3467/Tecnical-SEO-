@@ -25,6 +25,14 @@ export class JobManager {
     return Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
   }
 
+  public getStorageStatus(): { configured: boolean; provider: 'supabase' | 'vercel_blob' | 'missing' } {
+    if (this.hasSupabaseStorage()) return { configured: true, provider: 'supabase' };
+    if (Boolean(process.env.BLOB_STORE_ID && process.env.VERCEL_OIDC_TOKEN) || Boolean(process.env.BLOB_READ_WRITE_TOKEN)) {
+      return { configured: true, provider: 'vercel_blob' };
+    }
+    return { configured: false, provider: 'missing' };
+  }
+
   private getSupabaseClient(): SupabaseClient | undefined {
     if (!this.hasSupabaseStorage()) return undefined;
     if (!this.supabaseClient) {
@@ -219,6 +227,10 @@ export class JobManager {
     autoFixEnabled?: boolean;
     connectedSourceMode?: AuditJob['connectedSourceMode'];
   }): AuditJob {
+    if (process.env.VERCEL === '1' && !this.hasSharedStorage()) {
+      throw new Error('Shared audit storage is not configured on Vercel. Add SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Vercel Environment Variables, run the Supabase audit_jobs migration, then redeploy.');
+    }
+
     const id = randomUUID();
     let urlObj: URL;
     try {
