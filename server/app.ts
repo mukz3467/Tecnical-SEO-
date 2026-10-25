@@ -16,6 +16,7 @@ app.get('/api/status', (req, res) => {
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
+    jobStorage: jobManager.getStorageStatus(),
     integrations: {
       pagespeedApi: {
         configured: !!process.env.PAGESPEED_API_KEY,
