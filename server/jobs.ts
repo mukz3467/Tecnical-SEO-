@@ -282,7 +282,7 @@ export class JobManager {
             .order('updated_at', { ascending: false })
             .limit(50);
           if (error) throw new Error(`Supabase job history read failed: ${error.message}`);
-          return (data || []).map(row => row.job as AuditJob);
+          return (data || []).map(row => row.job as AuditJob).filter(job => job && typeof job.id === 'string');
         }
         const result = await list({ prefix: 'autoindex/jobs/', limit: 50 });
         const jobs = await Promise.all(result.blobs.map(async blob => {
