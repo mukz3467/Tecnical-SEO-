@@ -23,6 +23,11 @@ app.get('/api/status', (req, res) => {
         type: process.env.PAGESPEED_API_KEY ? 'live_google_api' : 'local_diagnostics_engine',
         description: 'Google PageSpeed Insights API for Lighthouse lab diagnostics and field data when available'
       },
+      githubAutoFix: {
+        configured: !!(process.env.AUTOFIX_GITHUB_TOKEN && process.env.AUTOFIX_GITHUB_REPOSITORY && process.env.AUTOFIX_ALLOWED_HOSTS),
+        type: (process.env.AUTOFIX_GITHUB_TOKEN && process.env.AUTOFIX_GITHUB_REPOSITORY && process.env.AUTOFIX_ALLOWED_HOSTS) ? 'reviewable_pull_requests' : 'not_configured',
+        description: 'Creates reviewable pull requests for robots.txt and sitemap.xml only; never writes directly to production.'
+      },
       searchConsoleApi: {
         configured: !!(process.env.GOOGLE_SERVICE_ACCOUNT_JSON || (process.env.GOOGLE_SEARCH_CONSOLE_CLIENT_EMAIL && process.env.GOOGLE_SEARCH_CONSOLE_PRIVATE_KEY)),
         type: (process.env.GOOGLE_SERVICE_ACCOUNT_JSON || (process.env.GOOGLE_SEARCH_CONSOLE_CLIENT_EMAIL && process.env.GOOGLE_SEARCH_CONSOLE_PRIVATE_KEY)) ? 'live_service_account' : 'not_configured',

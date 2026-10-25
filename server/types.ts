@@ -219,4 +219,5 @@ export interface AuditJob {
   generatedSitemapXml?: string;
   generatedRobotsTxt?: string;
   generatedRemediationReport?: string;
+  githubPullRequestUrl?: string;
 }
