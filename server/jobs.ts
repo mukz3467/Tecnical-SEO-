@@ -210,32 +210,63 @@ export class JobManager {
   }
 
   private async resumeIfStale(id: string): Promise<void> {
+    if (this.activePipelines.has(id)) return;
+
     const supabase = this.getSupabaseClient();
-    if (!supabase || this.activePipelines.has(id)) return;
-    const { data, error } = await supabase
-      .from('seo_audit_jobs')
-      .select('job,checkpoint,updated_at,status')
-      .eq('id', id)
-      .maybeSingle();
-    if (error || !data?.job || !data.updated_at) return;
-    const resumable = ['queued', 'crawling', 'auditing', 'remediating', 'validating', 'submitting_sitemap'].includes(data.status);
-    const staleForMs = Date.now() - new Date(data.updated_at).getTime();
-    if (!resumable || staleForMs < 20000) return;
+    let job: AuditJob | undefined;
+    let checkpoint: unknown;
+    let updatedAt: string | undefined;
 
-    // Compare-and-set the timestamp so only one serverless instance claims recovery.
-    const claimedAt = new Date().toISOString();
-    const claim = await supabase
-      .from('seo_audit_jobs')
-      .update({ updated_at: claimedAt })
-      .eq('id', id)
-      .eq('updated_at', data.updated_at)
-      .select('id')
-      .maybeSingle();
-    if (claim.error || !claim.data || this.activePipelines.has(id)) return;
+    if (supabase) {
+      const { data, error } = await supabase
+        .from('seo_audit_jobs')
+        .select('job,checkpoint,updated_at,status')
+        .eq('id', id)
+        .maybeSingle();
+      if (error || !data?.job || !data.updated_at) return;
+      const resumable = ['queued', 'crawling', 'auditing', 'remediating', 'validating', 'submitting_sitemap'].includes(data.status);
+      updatedAt = data.updated_at;
+      if (!resumable) return;
+      const staleForMs = Date.now() - new Date(updatedAt).getTime();
+      if (staleForMs < 20000) return;
 
-    const job = data.job as AuditJob;
-    if (data.checkpoint && Object.keys(data.checkpoint).length > 0) job.crawlCheckpoint = data.checkpoint as CrawlCheckpoint;
+      // Compare-and-set the timestamp so only one Supabase-backed instance claims recovery.
+      const claimedAt = new Date().toISOString();
+      const claim = await supabase
+        .from('seo_audit_jobs')
+        .update({ updated_at: claimedAt })
+        .eq('id', id)
+        .eq('updated_at', updatedAt)
+        .select('id')
+        .maybeSingle();
+      if (claim.error || !claim.data || this.activePipelines.has(id)) return;
+      job = data.job as AuditJob;
+      checkpoint = data.checkpoint;
+    } else if (this.getStorageStatus().provider === 'vercel_blob') {
+      // Blob has no row-level updated_at field; use the Blob's uploadedAt metadata
+      // to detect a stale job. Previously this path returned early, so Blob-backed
+      // jobs could never recover after a serverless request ended.
+      const pathname = `autoindex/jobs/${id}.json`;
+      const listing = await list({ prefix: pathname, limit: 10 });
+      const blobRef = listing.blobs.find(item => item.pathname === pathname);
+      if (!blobRef?.uploadedAt) return;
+      const storedJob = await this.readSharedJob(id);
+      if (!storedJob) return;
+      const resumable = ['queued', 'crawling', 'auditing', 'remediating', 'validating', 'submitting_sitemap'].includes(storedJob.status);
+      if (!resumable || Date.now() - new Date(blobRef.uploadedAt).getTime() < 20000) return;
+      // Refresh the persisted snapshot immediately below to reduce duplicate recovery
+      // attempts from subsequent requests while the resumed pipeline starts.
+      job = storedJob;
+    } else {
+      return;
+    }
+
+    if (!job) return;
+    if (checkpoint && typeof checkpoint === 'object' && Object.keys(checkpoint).length > 0) {
+      job.crawlCheckpoint = checkpoint as CrawlCheckpoint;
+    }
     job.logs = Array.isArray(job.logs) ? job.logs : [];
+    const claimedAt = new Date().toISOString();
     job.logs.push({
       timestamp: claimedAt,
       level: 'warn',
@@ -243,11 +274,17 @@ export class JobManager {
     });
     this.jobs.set(id, job);
     this.activePipelines.add(id);
+
+    // For Blob storage, persist the recovery marker before restarting the pipeline.
+    if (!supabase) {
+      await this.persistJobToSharedStorage(job).catch(e => console.error('Could not persist Blob recovery marker:', e));
+    }
+
     const recoveryPipeline = this.runJobPipeline(job)
       .catch(async err => {
-        job.status = 'failed';
-        job.error = err instanceof Error ? err.message : String(err);
-        await this.persistJobToSharedStorage(job).catch(e => console.error('Could not persist recovered job failure:', e));
+        job!.status = 'failed';
+        job!.error = err instanceof Error ? err.message : String(err);
+        await this.persistJobToSharedStorage(job!).catch(e => console.error('Could not persist recovered job failure:', e));
       })
       .finally(() => this.activePipelines.delete(id));
     if (process.env.VERCEL === '1') {
