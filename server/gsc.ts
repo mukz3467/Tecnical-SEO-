@@ -1,4 +1,4 @@
-import { createSign } from 'node:crypto';
+import { createPrivateKey, createSign } from 'node:crypto';
 import { GoogleSearchConsoleStatus, CrawledPage, SitemapInfo } from './types.ts';
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
@@ -9,6 +9,20 @@ type ServiceAccount = { client_email: string; private_key: string; token_uri?: s
 
 function base64Url(value: string | Buffer): string {
   return Buffer.from(value).toString('base64url');
+}
+
+function normalizePrivateKey(value: string): string {
+  let key = value.trim();
+  if ((key.startsWith('"') && key.endsWith('"')) || (key.startsWith("'") && key.endsWith("'"))) {
+    key = key.slice(1, -1);
+  }
+  // Vercel env vars may contain real line breaks or escaped \\n sequences.
+  return key
+    .replace(/\\r\\n/g, '\n')
+    .replace(/\\n/g, '\n')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .trim();
 }
 
 function getServiceAccount(): ServiceAccount | undefined {
@@ -46,7 +60,13 @@ async function getAccessToken(account: ServiceAccount, scope: string): Promise<s
   const signer = createSign('RSA-SHA256');
   signer.update(unsigned);
   signer.end();
-  const assertion = `${unsigned}.${signer.sign(account.private_key).toString('base64url')}`;
+  let signature: Buffer;
+  try {
+    signature = signer.sign(createPrivateKey({ key: normalizePrivateKey(account.private_key), format: 'pem' }));
+  } catch {
+    throw new Error('Google service-account private key could not be decoded. In Vercel Environment Variables, use the complete private_key value from the downloaded service-account JSON; preserve the BEGIN/END PEM lines and newline characters. Do not paste the whole JSON into GOOGLE_SEARCH_CONSOLE_PRIVATE_KEY.');
+  }
+  const assertion = `${unsigned}.${signature.toString('base64url')}`;
   const response = await fetch(account.token_uri || TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
