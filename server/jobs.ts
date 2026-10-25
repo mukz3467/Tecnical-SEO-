@@ -467,7 +467,6 @@ export class JobManager {
         },
         job.crawlCheckpoint
       );
-      job.crawlCheckpoint = undefined;
 
       job.crawledPages = crawlResult.crawledPages;
       job.sitemapInfo = crawlResult.sitemapInfo;
