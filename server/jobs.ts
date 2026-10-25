@@ -10,7 +10,6 @@ import { TechnicalSeoAuditor } from './audit.ts';
 import { analyzePerformance } from './pagespeed.ts';
 import { GoogleSearchConsoleIntegration } from './gsc.ts';
 import { RemediationEngine } from './remediation.ts';
-import { createSafeAutoFixPullRequest } from './github-autofix.ts';
 
 const JOBS_DIR = process.env.VERCEL ? path.join('/tmp', 'autoindex-jobs') : path.resolve(process.cwd(), '.data');
 const JOBS_FILE = path.join(JOBS_DIR, 'jobs.json');
@@ -561,26 +560,12 @@ export class JobManager {
       job.generatedRobotsTxt = RemediationEngine.generateOptimizedRobotsTxt(job.targetDomain, job.sitemapUrl || `${new URL(job.targetUrl).origin}/sitemap.xml`);
       job.generatedRemediationReport = RemediationEngine.generateRemediationReport(job.issues, job.targetDomain);
 
-      // Only robots.txt and sitemap.xml are eligible for this conservative connector.
-      // The connector is pinned to a configured repository and hostname allowlist and
-      // creates a pull request; it never writes to the production branch directly.
+      // Multi-site safety: do not use a global GitHub token/repository to change a scanned
+      // site. Until the site owner explicitly connects and authorizes their own repository,
+      // only prepare reviewable/downloadable remediation artifacts. Crawling and audit remain
+      // available for any safe public website.
       if (job.autoFixEnabled) {
-        try {
-          const autoFix = await createSafeAutoFixPullRequest({
-            targetDomain: job.targetDomain,
-            sitemapXml: job.generatedSitemapXml,
-            robotsTxt: job.generatedRobotsTxt
-          });
-          if (autoFix.status === 'created' && autoFix.url) {
-            job.githubPullRequestUrl = autoFix.url;
-            addLog('success', `Created a reviewable GitHub auto-fix pull request: ${autoFix.url}`);
-          } else {
-            addLog('info', autoFix.reason || 'GitHub auto-fix connector skipped; downloadable suggestions are still available.');
-          }
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          addLog('warn', `GitHub auto-fix could not create a pull request: ${message}`);
-        }
+        addLog('info', 'Prepared remediation artifacts for this website. Live repository changes are paused until this site owner connects and authorizes their own GitHub repository; no unrelated repository will be modified.');
       }
 
       // Stage 5: Google Search Console Submission
