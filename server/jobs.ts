@@ -68,14 +68,25 @@ export class JobManager {
     // Blob SDK get() requires the blob URL, not its pathname.
     // Resolve the private blob URL from the store listing first.
     const pathname = `autoindex/jobs/${id}.json`;
-    const listing = await list({ prefix: pathname, limit: 10 });
-    const blobRef = listing.blobs.find(item => item.pathname === pathname);
-    if (!blobRef?.url) return undefined;
-
-    const blob = await get(blobRef.url, { access: 'private', useCache: false });
-    if (!blob || blob.statusCode !== 200 || !blob.stream) return undefined;
-    const raw = await new Response(blob.stream).text();
-    return JSON.parse(raw) as AuditJob;
+    // A newly written Blob can briefly be absent from a listing immediately after
+    // the POST /api/jobs response. Retry listing before returning a false 404.
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const listing = await list({ prefix: pathname, limit: 10 });
+      const blobRef = listing.blobs.find(item => item.pathname === pathname);
+      if (blobRef?.url) {
+        const blob = await get(blobRef.url, { access: 'private', useCache: false });
+        if (blob && blob.statusCode === 200 && blob.stream) {
+          const raw = await new Response(blob.stream).text();
+          return JSON.parse(raw) as AuditJob;
+        }
+      }
+      if (attempt < 3) {
+        await new Promise(resolve => setTimeout(resolve, 250 * (attempt + 1)));
+      }
+    }
+    // If this instance happens to hold the job locally, use that copy rather than
+    // making the dashboard incorrectly mark a live audit as lost.
+    return this.jobs.get(id);
   }
 
   private constructor() {
