@@ -8,6 +8,15 @@ interface SummaryCardsProps {
 
 export const SummaryCards: React.FC<SummaryCardsProps> = ({ job }) => {
   const { summary, performanceMetrics, searchConsoleStatus } = job;
+  const performanceScore =
+    typeof performanceMetrics?.score === 'number' && Number.isFinite(performanceMetrics.score)
+      ? performanceMetrics.score
+      : null;
+  const submissionLabel = searchConsoleStatus.sitemapSubmitted
+    ? 'Sitemap submitted'
+    : ['completed', 'failed', 'cancelled'].includes(job.status)
+      ? 'Submission not confirmed'
+      : 'Awaiting audit result';
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
@@ -78,16 +87,16 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({ job }) => {
         </div>
         <div className="flex items-baseline gap-2">
           <span className="text-2xl font-bold text-white tracking-tight">
-            {performanceMetrics ? `${performanceMetrics.score}/100` : '--'}
+            {performanceScore !== null ? `${performanceScore}/100` : 'N/A'}
           </span>
           <span className="text-xs text-slate-400">
-            TTFB: {performanceMetrics?.metrics.ttfbMs ?? '--'}ms
+            TTFB: {typeof performanceMetrics?.metrics?.ttfbMs === 'number' ? `${performanceMetrics.metrics.ttfbMs}ms` : 'N/A'}
           </span>
         </div>
         <div className="mt-2 text-[11px] text-emerald-400 font-medium flex items-center gap-1">
           <Send className="w-3 h-3 text-emerald-400" />
           <span>
-            {searchConsoleStatus.sitemapSubmitted ? 'Sitemap Submitted' : 'Pending Submission'}
+            {submissionLabel}
           </span>
         </div>
       </div>
