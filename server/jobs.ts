@@ -103,29 +103,39 @@ export class JobManager {
     }
   }
 
+  private async writeSupabaseSnapshot(job: AuditJob): Promise<void> {
+    const supabase = this.getSupabaseClient();
+    if (!supabase) throw new Error('Supabase storage is not configured.');
+    const { error } = await supabase.from('seo_audit_jobs').upsert({
+      id: job.id,
+      target_url: job.targetUrl,
+      job,
+      checkpoint: job.crawlCheckpoint || {},
+      status: job.status,
+      progress: job.progress,
+      crawled_pages: job.crawledPages?.length || 0,
+      issues_discovered: {
+        critical: job.issues.filter(i => i.severity === 'critical').length,
+        high: job.issues.filter(i => i.severity === 'high').length,
+        medium: job.issues.filter(i => i.severity === 'medium').length,
+        low: job.issues.filter(i => i.severity === 'low').length
+      },
+      error_message: job.error || null,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'id' });
+    if (error) throw new Error(`Supabase job write failed: ${error.message}`);
+    await this.persistCrawledPages(job);
+  }
+
   private async persistJobToSharedStorage(job: AuditJob, _addToIndex = false): Promise<void> {
     if (!this.hasSharedStorage()) return;
     const supabase = this.getSupabaseClient();
     if (supabase) {
-      const { error } = await supabase.from('seo_audit_jobs').upsert({
-        id: job.id,
-        target_url: job.targetUrl,
-        job,
-        checkpoint: job.crawlCheckpoint || {},
-        status: job.status,
-        progress: job.progress,
-        crawled_pages: job.crawledPages?.length || 0,
-        issues_discovered: {
-          critical: job.issues.filter(i => i.severity === 'critical').length,
-          high: job.issues.filter(i => i.severity === 'high').length,
-          medium: job.issues.filter(i => i.severity === 'medium').length,
-          low: job.issues.filter(i => i.severity === 'low').length
-        },
-        error_message: job.error || null,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'id' });
-      if (error) throw new Error(`Supabase job write failed: ${error.message}`);
-      await this.persistCrawledPages(job);
+      const snapshot = JSON.parse(JSON.stringify(job)) as AuditJob;
+      const previous = this.blobPersistQueue.get(job.id) || Promise.resolve();
+      const next = previous.catch(() => undefined).then(() => this.writeSupabaseSnapshot(snapshot));
+      this.blobPersistQueue.set(job.id, next);
+      await next;
       return;
     }
     const snapshot = JSON.stringify(job);
@@ -174,26 +184,7 @@ export class JobManager {
     const snapshot = JSON.stringify(job);
     const next = previous.catch(() => undefined).then(async () => {
       if (supabase) {
-        const snapshotJob = JSON.parse(snapshot) as AuditJob;
-        const { error } = await supabase.from('seo_audit_jobs').upsert({
-          id: job.id,
-          target_url: job.targetUrl,
-          job: snapshotJob,
-          checkpoint: snapshotJob.crawlCheckpoint || {},
-          status: job.status,
-          progress: job.progress,
-          crawled_pages: job.crawledPages?.length || 0,
-          issues_discovered: {
-            critical: job.issues.filter(i => i.severity === 'critical').length,
-            high: job.issues.filter(i => i.severity === 'high').length,
-            medium: job.issues.filter(i => i.severity === 'medium').length,
-            low: job.issues.filter(i => i.severity === 'low').length
-          },
-          error_message: job.error || null,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'id' });
-        if (error) throw new Error(`Supabase job checkpoint failed: ${error.message}`);
-        await this.persistCrawledPages(snapshotJob);
+        await this.writeSupabaseSnapshot(JSON.parse(snapshot) as AuditJob);
       } else {
         await put(`autoindex/jobs/${job.id}.json`, snapshot, {
           access: 'private',
