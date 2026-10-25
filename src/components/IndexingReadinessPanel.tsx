@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, CheckCircle2, CircleHelp, ExternalLink, FileSearch, Globe, ListChecks, ShieldCheck, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, CircleHelp, ExternalLink, FileSearch, Globe, ListChecks, XCircle } from 'lucide-react';
 import { AuditJob } from '../types.ts';
 import { GoogleSearchConsoleCard } from './GoogleSearchConsoleCard.tsx';
 
@@ -30,7 +30,7 @@ function getChecks(job: AuditJob): Check[] {
       detail: !sitemap ? 'No sitemap result is available from this audit yet.' :
         sitemap.exists && sitemap.errors.length === 0 && sitemap.urlCount > 0
           ? `${sitemap.urlCount} URL(s) found in the sitemap.`
-          : `Sitemap issue: ${[...sitemap.errors, ...sitemap.warnings].slice(0, 2).join(' ') || 'No URLs were found.'`
+          : `Sitemap issue: ${[...sitemap.errors, ...sitemap.warnings].slice(0, 2).join(' ') || 'No URLs were found.'}`
     },
     {
       label: 'Pages return successful HTTP status',
