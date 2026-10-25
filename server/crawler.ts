@@ -152,7 +152,7 @@ export class TechnicalSeoCrawler {
       visitedUrls: [...this.visitedUrls],
       crawledPages: [...this.crawledPages],
       sitemapDiscoveredUrls: [...this.sitemapDiscoveredUrls],
-      internalLinksFound: [...this.internalLinksFound.entries()].map(([url, sources]) => [url, [...sources]]),
+      internalLinksFound: [...this.internalLinksFound.entries()].map(([url, sources]) => [url, [...sources]] as [string, string[]]),
       sitemapInfo,
       robotsTxtInfo
     };
