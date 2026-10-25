@@ -37,11 +37,12 @@ function getServiceAccount(): ServiceAccount | undefined {
     if (!parsed.client_email || !parsed.private_key) {
       throw new Error('GOOGLE_SERVICE_ACCOUNT_JSON is missing client_email or private_key.');
     }
-    return { ...parsed, private_key: parsed.private_key.replace(/\\n/g, '\n'), token_uri: parsed.token_uri || TOKEN_URL };
+    return { ...parsed, private_key: normalizePrivateKey(parsed.private_key), token_uri: parsed.token_uri || TOKEN_URL };
   }
 
   const clientEmail = process.env.GOOGLE_SEARCH_CONSOLE_CLIENT_EMAIL;
-  const privateKey = process.env.GOOGLE_SEARCH_CONSOLE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+  const privateKeyRaw = process.env.GOOGLE_SEARCH_CONSOLE_PRIVATE_KEY;
+  const privateKey = privateKeyRaw ? normalizePrivateKey(privateKeyRaw) : undefined;
   if (clientEmail && privateKey) return { client_email: clientEmail, private_key: privateKey, token_uri: TOKEN_URL };
   return undefined;
 }
@@ -109,7 +110,7 @@ export class GoogleSearchConsoleIntegration {
     let account: ServiceAccount | undefined;
     try {
       account = credentials?.clientEmail && credentials?.privateKey
-        ? { client_email: credentials.clientEmail, private_key: credentials.privateKey.replace(/\\n/g, '\n'), token_uri: TOKEN_URL }
+        ? { client_email: credentials.clientEmail, private_key: normalizePrivateKey(credentials.privateKey), token_uri: TOKEN_URL }
         : getServiceAccount();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Invalid Google service-account configuration.';
