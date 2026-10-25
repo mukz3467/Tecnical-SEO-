@@ -243,13 +243,18 @@ export class JobManager {
     });
     this.jobs.set(id, job);
     this.activePipelines.add(id);
-    void this.runJobPipeline(job)
+    const recoveryPipeline = this.runJobPipeline(job)
       .catch(async err => {
         job.status = 'failed';
         job.error = err instanceof Error ? err.message : String(err);
         await this.persistJobToSharedStorage(job).catch(e => console.error('Could not persist recovered job failure:', e));
       })
       .finally(() => this.activePipelines.delete(id));
+    if (process.env.VERCEL === '1') {
+      waitUntil(recoveryPipeline);
+    } else {
+      void recoveryPipeline;
+    }
   }
 
   public async getJob(id: string): Promise<AuditJob | undefined> {
