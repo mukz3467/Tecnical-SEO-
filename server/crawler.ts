@@ -51,7 +51,7 @@ export class TechnicalSeoCrawler {
       this.crawledPages = [...resumeState.crawledPages];
       this.sitemapDiscoveredUrls = new Set(resumeState.sitemapDiscoveredUrls);
       this.internalLinksFound = new Map(
-        resumeState.internalLinksFound.map(([url, sources]) => [url, new Set(sources)])
+        resumeState.internalLinksFound.map(([url, sources]) => [url, new Set(sources)] as [string, Set<string>])
       );
       robotsTxtInfo = resumeState.robotsTxtInfo || await this.auditRobotsTxt();
       sitemapInfo = resumeState.sitemapInfo || await this.auditSitemap(
