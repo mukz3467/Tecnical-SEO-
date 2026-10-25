@@ -174,6 +174,18 @@ export interface AuditJob {
   completedAt?: string;
   error?: string;
   
+  // Serializable crawler state persisted to Supabase so a new serverless invocation
+  // can continue from the last fully saved page instead of losing its in-memory queue.
+  crawlCheckpoint?: {
+    queue: Array<{ url: string; depth: number }>;
+    visitedUrls: string[];
+    crawledPages: CrawledPage[];
+    sitemapDiscoveredUrls: string[];
+    internalLinksFound: Array<[string, string[]]>;
+    sitemapInfo?: SitemapInfo;
+    robotsTxtInfo?: RobotsTxtInfo;
+  };
+
   // Results
   crawledPages: CrawledPage[];
   sitemapInfo?: SitemapInfo;
