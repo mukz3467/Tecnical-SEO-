@@ -2,6 +2,16 @@ import * as cheerio from 'cheerio';
 import { safeFetch, validateTargetUrl } from './security.ts';
 import { CrawledPage, SitemapInfo, RobotsTxtInfo, SeoIssue } from './types.ts';
 
+export interface CrawlCheckpoint {
+  queue: Array<{ url: string; depth: number }>;
+  visitedUrls: string[];
+  crawledPages: CrawledPage[];
+  sitemapDiscoveredUrls: string[];
+  internalLinksFound: Array<[string, string[]]>;
+  sitemapInfo?: SitemapInfo;
+  robotsTxtInfo?: RobotsTxtInfo;
+}
+
 export interface CrawlOptions {
   targetDomain: string;
   seedUrl: string;
@@ -21,67 +31,78 @@ export class TechnicalSeoCrawler {
 
   constructor(private options: CrawlOptions) {}
 
-  public async runCrawl(onProgress?: (progress: number, stage: string, message: string) => void): Promise<{
+  public async runCrawl(
+    onProgress?: (progress: number, stage: string, message: string) => void,
+    onCheckpoint?: (checkpoint: CrawlCheckpoint) => Promise<void> | void,
+    resumeState?: CrawlCheckpoint
+  ): Promise<{
     crawledPages: CrawledPage[];
     sitemapInfo: SitemapInfo;
     robotsTxtInfo: RobotsTxtInfo;
     orphanPages: string[];
   }> {
     const maxPages = this.options.maxPages || 25;
+    let robotsTxtInfo: RobotsTxtInfo;
+    let sitemapInfo: SitemapInfo;
 
-    onProgress?.(5, 'crawling', 'Inspecting robots.txt and sitemap directives...');
-    
-    // 1. Fetch & Parse robots.txt
-    const robotsTxtInfo = await this.withTimeout(
-      this.auditRobotsTxt(),
-      12000,
-      {
-        url: `${this.options.seedUrl.replace(/\/$/, '')}/robots.txt`,
-        exists: false,
-        content: '',
-        rules: [],
-        sitemaps: [],
-        errors: ['robots.txt audit exceeded the 12-second stage limit; continuing crawl safely.'],
-        warnings: []
-      } satisfies RobotsTxtInfo
-    );
-    
-    // 2. Discover & Parse Sitemap
-    onProgress?.(15, 'crawling', 'Validating XML sitemaps and nested indexes...');
-    const sitemapTarget = this.options.sitemapUrl || (robotsTxtInfo.sitemaps.length > 0 ? robotsTxtInfo.sitemaps[0] : `${this.options.seedUrl.replace(/\/$/, '')}/sitemap.xml`);
-    const sitemapInfo = await this.withTimeout(
-      this.auditSitemap(sitemapTarget),
-      15000,
-      {
-        url: sitemapTarget,
-        exists: false,
-        type: 'error',
-        urlCount: 0,
-        errors: ['Sitemap audit exceeded the 15-second stage limit; continuing with discovered links.'],
-        warnings: [],
-        discoveredUrls: []
-      } satisfies SitemapInfo
-    );
+    if (resumeState) {
+      this.queue = [...resumeState.queue];
+      this.visitedUrls = new Set(resumeState.visitedUrls);
+      this.crawledPages = [...resumeState.crawledPages];
+      this.sitemapDiscoveredUrls = new Set(resumeState.sitemapDiscoveredUrls);
+      this.internalLinksFound = new Map(
+        resumeState.internalLinksFound.map(([url, sources]) => [url, new Set(sources)])
+      );
+      robotsTxtInfo = resumeState.robotsTxtInfo || await this.auditRobotsTxt();
+      sitemapInfo = resumeState.sitemapInfo || await this.auditSitemap(
+        this.options.sitemapUrl || `${this.options.seedUrl.replace(/\/$/, '')}/sitemap.xml`
+      );
+      onProgress?.(25, 'crawling', `Resuming saved crawl queue (${this.queue.length} queued, ${this.crawledPages.length} already crawled)...`);
+    } else {
+      onProgress?.(5, 'crawling', 'Inspecting robots.txt and sitemap directives...');
+      robotsTxtInfo = await this.withTimeout(
+        this.auditRobotsTxt(),
+        12000,
+        {
+          url: `${this.options.seedUrl.replace(/\/$/, '')}/robots.txt`,
+          exists: false,
+          content: '',
+          rules: [],
+          sitemaps: [],
+          errors: ['robots.txt audit exceeded the 12-second stage limit; continuing crawl safely.'],
+          warnings: []
+        } satisfies RobotsTxtInfo
+      );
 
-    // Populate queue with seed URL
-    this.enqueue(this.options.seedUrl, 0);
+      onProgress?.(15, 'crawling', 'Validating XML sitemaps and nested indexes...');
+      const sitemapTarget = this.options.sitemapUrl || (robotsTxtInfo.sitemaps.length > 0 ? robotsTxtInfo.sitemaps[0] : `${this.options.seedUrl.replace(/\/$/, '')}/sitemap.xml`);
+      sitemapInfo = await this.withTimeout(
+        this.auditSitemap(sitemapTarget),
+        15000,
+        {
+          url: sitemapTarget,
+          exists: false,
+          type: 'error',
+          urlCount: 0,
+          errors: ['Sitemap audit exceeded the 15-second stage limit; continuing with discovered links.'],
+          warnings: [],
+          discoveredUrls: []
+        } satisfies SitemapInfo
+      );
 
-    // Enqueue sitemap URLs
-    for (const sUrl of sitemapInfo.discoveredUrls) {
-      this.sitemapDiscoveredUrls.add(this.normalizeUrl(sUrl));
-      this.enqueue(sUrl, 1);
-    }
-
-    // Enqueue custom URLs if any
-    if (this.options.customUrls) {
-      for (const cUrl of this.options.customUrls) {
-        this.enqueue(cUrl, 1);
+      this.enqueue(this.options.seedUrl, 0);
+      for (const sUrl of sitemapInfo.discoveredUrls) {
+        this.sitemapDiscoveredUrls.add(this.normalizeUrl(sUrl));
+        this.enqueue(sUrl, 1);
       }
+      if (this.options.customUrls) {
+        for (const cUrl of this.options.customUrls) this.enqueue(cUrl, 1);
+      }
+      onProgress?.(25, 'crawling', `Starting crawl queue (${this.queue.length} seed targets)...`);
+      await onCheckpoint?.(this.createCheckpoint(sitemapInfo, robotsTxtInfo));
     }
 
-    onProgress?.(25, 'crawling', `Starting crawl queue (${this.queue.length} seed targets)...`);
-
-    let processedCount = 0;
+    let processedCount = this.crawledPages.length;
 
     while (this.queue.length > 0 && this.visitedUrls.size < maxPages) {
       const item = this.queue.shift();
@@ -95,9 +116,9 @@ export class TechnicalSeoCrawler {
       const pct = Math.min(65, 25 + Math.round((processedCount / maxPages) * 40));
       onProgress?.(pct, 'crawling', `Crawling [${processedCount}/${maxPages}]: ${item.url}`);
 
-      // Crawl individual page
       const page = await this.crawlSinglePage(item.url, item.depth);
       this.crawledPages.push(page);
+      await onCheckpoint?.(this.createCheckpoint(sitemapInfo, robotsTxtInfo));
 
       // Delay to respect server policies
       if (this.options.delayMs && this.options.delayMs > 0) {
@@ -122,6 +143,18 @@ export class TechnicalSeoCrawler {
       sitemapInfo,
       robotsTxtInfo,
       orphanPages
+    };
+  }
+
+  private createCheckpoint(sitemapInfo: SitemapInfo, robotsTxtInfo: RobotsTxtInfo): CrawlCheckpoint {
+    return {
+      queue: [...this.queue],
+      visitedUrls: [...this.visitedUrls],
+      crawledPages: [...this.crawledPages],
+      sitemapDiscoveredUrls: [...this.sitemapDiscoveredUrls],
+      internalLinksFound: [...this.internalLinksFound.entries()].map(([url, sources]) => [url, [...sources]]),
+      sitemapInfo,
+      robotsTxtInfo
     };
   }
 
