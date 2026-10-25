@@ -2,10 +2,11 @@ import express from 'express';
 import { JobManager } from './jobs.ts';
 import { validateTargetUrl } from './security.ts';
 import { RemediationEngine } from './remediation.ts';
+import { inspectWebsiteZip } from './zip-audit.ts';
 
 const app = express();
 
-app.use(express.json());
+app.use(express.json({ limit: '16mb' }));
 
 const jobManager = JobManager.getInstance();
 
@@ -44,6 +45,25 @@ app.post('/api/validate-target', async (req, res) => {
   const { url } = req.body;
   const result = await validateTargetUrl(url, false);
   res.json(result);
+});
+
+// -------------------------------------------------------------
+// 2B. OPTIONAL ZIP SOURCE INSPECTION (NO GITHUB REQUIRED)
+// -------------------------------------------------------------
+app.post('/api/source-zip-audit', (req, res) => {
+  try {
+    const { fileName, zipBase64 } = req.body || {};
+    if (typeof fileName !== 'string' || !/\.zip$/i.test(fileName)) {
+      return res.status(400).json({ error: 'Please upload a .zip archive.' });
+    }
+    if (typeof zipBase64 !== 'string') {
+      return res.status(400).json({ error: 'ZIP file data is required.' });
+    }
+    return res.json(inspectWebsiteZip(zipBase64));
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'ZIP inspection failed.';
+    return res.status(400).json({ error: message });
+  }
 });
 
 // -------------------------------------------------------------
