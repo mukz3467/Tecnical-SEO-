@@ -17,7 +17,7 @@ export default function App() {
   const [activeJob, setActiveJob] = useState<AuditJob | null>(null);
   const [isStarting, setIsStarting] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'issues' | 'pages' | 'performance' | 'gsc'>('issues');
+  const [activeTab, setActiveTab] = useState<'issues' | 'pages' | 'performance' | 'gsc'>('gsc');
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
 
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
@@ -140,6 +140,7 @@ export default function App() {
       const newJob: AuditJob = responseData as AuditJob;
       setActiveJob(newJob);
       setJobs(prev => [newJob, ...prev]);
+      setActiveTab('gsc');
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       setErrorBanner(errorMsg);
