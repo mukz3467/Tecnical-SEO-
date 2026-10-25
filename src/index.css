@@ -1,6 +1,5 @@
 @import "tailwindcss";
 
-/* AutoIndex AI — clean monochrome interface */
 :root {
   color-scheme: light;
   font-synthesis: none;
@@ -13,13 +12,15 @@
 }
 html, body, #root {
   min-height: 100%;
-  background: var(--mono-white) !important;
-  color: var(--mono-ink) !important;
+  background: #ffffff !important;
+  color: #111111 !important;
 }
+html { scroll-behavior: smooth; }
 body { margin: 0; }
 #root { background: #ffffff !important; }
+*, *::before, *::after { box-sizing: border-box; }
 
-/* Replace the original dark dashboard surfaces with white surfaces. */
+/* Neutralize the previous dark dashboard palette while keeping semantic status states readable. */
 .bg-slate-950, .bg-slate-900, .bg-slate-800, .bg-slate-700,
 .bg-gray-950, .bg-gray-900, .bg-gray-800, .bg-zinc-950, .bg-zinc-900,
 .bg-neutral-950, .bg-neutral-900 {
@@ -46,7 +47,7 @@ body { margin: 0; }
 }
 [class*="shadow-"] { --tw-shadow-color: #0000000d; }
 
-/* Every button is black with white text; hover remains monochrome. */
+/* Primary actions are black, with white labels. */
 button, input[type="button"], input[type="submit"], input[type="reset"],
 [role="button"], .btn, .button {
   background: #000000 !important;
@@ -56,9 +57,9 @@ button, input[type="button"], input[type="submit"], input[type="reset"],
 button *, [role="button"] *, .btn *, .button * { color: #ffffff !important; }
 button:hover, input[type="button"]:hover, input[type="submit"]:hover,
 input[type="reset"]:hover, [role="button"]:hover, .btn:hover, .button:hover {
-  background: #292929 !important;
+  background: #262626 !important;
   color: #ffffff !important;
-  border-color: #292929 !important;
+  border-color: #262626 !important;
 }
 button:disabled, input[type="submit"]:disabled {
   background: #737373 !important;
@@ -66,8 +67,6 @@ button:disabled, input[type="submit"]:disabled {
   border-color: #737373 !important;
   cursor: not-allowed;
 }
-
-/* Inputs and data panels stay white and legible. */
 input, textarea, select {
   background: #ffffff !important;
   color: #111111 !important;
@@ -78,9 +77,8 @@ table, thead, tbody, tr, th, td { border-color: #e5e5e5; }
 a { color: #111111; }
 a:hover { color: #000000; }
 ::selection { background: #111111; color: #ffffff; }
+:focus-visible { outline: 2px solid #111111; outline-offset: 3px; }
 
-/* Keep the dashboard comfortable on phones. */
-*, *::before, *::after { box-sizing: border-box; }
 @media (max-width: 640px) {
   main { width: 100%; }
   button { max-width: 100%; }
