@@ -5,7 +5,7 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import fs from 'fs';
 import path from 'path';
 import { AuditJob } from './types.ts';
-import { TechnicalSeoCrawler, CrawlCheckpoint } from './crawler.ts';
+import { TechnicalSeoCrawler, type CrawlCheckpoint } from './crawler.ts';
 import { TechnicalSeoAuditor } from './audit.ts';
 import { analyzePerformance } from './pagespeed.ts';
 import { GoogleSearchConsoleIntegration } from './gsc.ts';
