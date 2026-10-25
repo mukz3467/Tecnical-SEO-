@@ -174,7 +174,7 @@ export class JobManager {
         }
         return undefined;
       } catch (e) {
-        console.error('Shared Vercel Blob job read failed:', e);
+        console.error('Shared audit job read failed:', e);
         // Do not silently use an instance-local copy when shared storage is configured.
         return undefined;
       }
@@ -203,7 +203,7 @@ export class JobManager {
         return jobs.filter((job): job is AuditJob => Boolean(job))
           .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
       } catch (e) {
-        console.error('Shared Vercel Blob job history read failed:', e);
+        console.error('Shared audit job history read failed:', e);
         return [];
       }
     }
@@ -295,7 +295,7 @@ export class JobManager {
         await this.persistJobToSharedStorage(job, true);
       } catch (e) {
         console.error('Could not initialize shared job storage:', e);
-        throw new Error('Shared job storage is configured but unavailable. Check the Vercel Blob store connection in Project Storage.');
+        throw new Error('Shared job storage is configured but unavailable. Check SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY, or verify the connected private Vercel Blob store.');
       }
     }
 
