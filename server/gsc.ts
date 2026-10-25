@@ -1,4 +1,4 @@
-import { createSign } from 'node:crypto';
+import { createPrivateKey, createSign } from 'node:crypto';
 import { GoogleSearchConsoleStatus, CrawledPage, SitemapInfo } from './types.ts';
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
@@ -9,6 +9,20 @@ type ServiceAccount = { client_email: string; private_key: string; token_uri?: s
 
 function base64Url(value: string | Buffer): string {
   return Buffer.from(value).toString('base64url');
+}
+
+function normalizePrivateKey(value: string): string {
+  let key = value.trim();
+  if ((key.startsWith('"') && key.endsWith('"')) || (key.startsWith("'") && key.endsWith("'"))) {
+    key = key.slice(1, -1);
+  }
+  // Vercel env vars may contain real line breaks or escaped \\n sequences.
+  return key
+    .replace(/\\r\\n/g, '\n')
+    .replace(/\\n/g, '\n')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n')
+    .trim();
 }
 
 function getServiceAccount(): ServiceAccount | undefined {
@@ -23,11 +37,12 @@ function getServiceAccount(): ServiceAccount | undefined {
     if (!parsed.client_email || !parsed.private_key) {
       throw new Error('GOOGLE_SERVICE_ACCOUNT_JSON is missing client_email or private_key.');
     }
-    return { ...parsed, private_key: parsed.private_key.replace(/\\n/g, '\n'), token_uri: parsed.token_uri || TOKEN_URL };
+    return { ...parsed, private_key: normalizePrivateKey(parsed.private_key), token_uri: parsed.token_uri || TOKEN_URL };
   }
 
   const clientEmail = process.env.GOOGLE_SEARCH_CONSOLE_CLIENT_EMAIL;
-  const privateKey = process.env.GOOGLE_SEARCH_CONSOLE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+  const privateKeyRaw = process.env.GOOGLE_SEARCH_CONSOLE_PRIVATE_KEY;
+  const privateKey = privateKeyRaw ? normalizePrivateKey(privateKeyRaw) : undefined;
   if (clientEmail && privateKey) return { client_email: clientEmail, private_key: privateKey, token_uri: TOKEN_URL };
   return undefined;
 }
@@ -46,7 +61,13 @@ async function getAccessToken(account: ServiceAccount, scope: string): Promise<s
   const signer = createSign('RSA-SHA256');
   signer.update(unsigned);
   signer.end();
-  const assertion = `${unsigned}.${signer.sign(account.private_key).toString('base64url')}`;
+  let signature: Buffer;
+  try {
+    signature = signer.sign(createPrivateKey({ key: normalizePrivateKey(account.private_key), format: 'pem' }));
+  } catch {
+    throw new Error('Google service-account private key could not be decoded. In Vercel Environment Variables, use the complete private_key value from the downloaded service-account JSON; preserve the BEGIN/END PEM lines and newline characters. Do not paste the whole JSON into GOOGLE_SEARCH_CONSOLE_PRIVATE_KEY.');
+  }
+  const assertion = `${unsigned}.${signature.toString('base64url')}`;
   const response = await fetch(account.token_uri || TOKEN_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
@@ -89,7 +110,7 @@ export class GoogleSearchConsoleIntegration {
     let account: ServiceAccount | undefined;
     try {
       account = credentials?.clientEmail && credentials?.privateKey
-        ? { client_email: credentials.clientEmail, private_key: credentials.privateKey.replace(/\\n/g, '\n'), token_uri: TOKEN_URL }
+        ? { client_email: credentials.clientEmail, private_key: normalizePrivateKey(credentials.privateKey), token_uri: TOKEN_URL }
         : getServiceAccount();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Invalid Google service-account configuration.';
