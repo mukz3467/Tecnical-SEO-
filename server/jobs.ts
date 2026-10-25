@@ -54,7 +54,7 @@ export class JobManager {
     const supabase = this.getSupabaseClient();
     if (supabase) {
       const { data, error } = await supabase
-        .from('audit_jobs')
+        .from('seo_audit_jobs')
         .select('job')
         .eq('id', id)
         .maybeSingle();
@@ -103,14 +103,24 @@ export class JobManager {
     if (!this.hasSharedStorage()) return;
     const supabase = this.getSupabaseClient();
     if (supabase) {
-      const { error } = await supabase.from('audit_jobs').upsert({
+      const { error } = await supabase.from('seo_audit_jobs').upsert({
         id: job.id,
+        target_url: job.targetUrl,
         job,
         status: job.status,
         progress: job.progress,
+        crawled_pages: job.crawledPages?.length || 0,
+        issues_discovered: {
+          critical: job.issues.filter(i => i.severity === 'critical').length,
+          high: job.issues.filter(i => i.severity === 'high').length,
+          medium: job.issues.filter(i => i.severity === 'medium').length,
+          low: job.issues.filter(i => i.severity === 'low').length
+        },
+        error_message: job.error || null,
         updated_at: new Date().toISOString()
       }, { onConflict: 'id' });
       if (error) throw new Error(`Supabase job write failed: ${error.message}`);
+      await this.persistCrawledPages(job);
       return;
     }
     const snapshot = JSON.stringify(job);
@@ -127,6 +137,25 @@ export class JobManager {
     await next;
   }
 
+  private async persistCrawledPages(job: AuditJob): Promise<void> {
+    const supabase = this.getSupabaseClient();
+    if (!supabase || !job.crawledPages?.length) return;
+    const rows = job.crawledPages.map(page => ({
+      job_id: job.id,
+      url: page.url,
+      status_code: page.status,
+      issues: [],
+      page
+    }));
+    // Upsert requires the migration's unique (job_id, url) constraint.
+    for (let offset = 0; offset < rows.length; offset += 50) {
+      const { error } = await supabase
+        .from('crawled_pages')
+        .upsert(rows.slice(offset, offset + 50), { onConflict: 'job_id,url' });
+      if (error) throw new Error(`Supabase crawled-page checkpoint failed: ${error.message}`);
+    }
+  }
+
   private queueSharedPersist(job: AuditJob): void {
     if (!this.hasSharedStorage()) return;
     const now = Date.now();
@@ -140,14 +169,25 @@ export class JobManager {
     const snapshot = JSON.stringify(job);
     const next = previous.catch(() => undefined).then(async () => {
       if (supabase) {
-        const { error } = await supabase.from('audit_jobs').upsert({
+        const snapshotJob = JSON.parse(snapshot) as AuditJob;
+        const { error } = await supabase.from('seo_audit_jobs').upsert({
           id: job.id,
-          job: JSON.parse(snapshot),
+          target_url: job.targetUrl,
+          job: snapshotJob,
           status: job.status,
           progress: job.progress,
+          crawled_pages: job.crawledPages?.length || 0,
+          issues_discovered: {
+            critical: job.issues.filter(i => i.severity === 'critical').length,
+            high: job.issues.filter(i => i.severity === 'high').length,
+            medium: job.issues.filter(i => i.severity === 'medium').length,
+            low: job.issues.filter(i => i.severity === 'low').length
+          },
+          error_message: job.error || null,
           updated_at: new Date().toISOString()
         }, { onConflict: 'id' });
         if (error) throw new Error(`Supabase job checkpoint failed: ${error.message}`);
+        await this.persistCrawledPages(snapshotJob);
       } else {
         await put(`autoindex/jobs/${job.id}.json`, snapshot, {
           access: 'private',
@@ -196,7 +236,7 @@ export class JobManager {
         const supabase = this.getSupabaseClient();
         if (supabase) {
           const { data, error } = await supabase
-            .from('audit_jobs')
+            .from('seo_audit_jobs')
             .select('job')
             .order('updated_at', { ascending: false })
             .limit(50);
