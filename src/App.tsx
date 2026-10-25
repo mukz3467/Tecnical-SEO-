@@ -5,7 +5,7 @@ import { LiveProgressCard } from './components/LiveProgressCard.tsx';
 import { SummaryCards } from './components/SummaryCards.tsx';
 import { IssuesTable } from './components/IssuesTable.tsx';
 import { PerformanceCard } from './components/PerformanceCard.tsx';
-import { GoogleSearchConsoleCard } from './components/GoogleSearchConsoleCard.tsx';
+import { IndexingReadinessPanel } from './components/IndexingReadinessPanel.tsx';
 import { CrawledPagesTable } from './components/CrawledPagesTable.tsx';
 import { ArtifactsDownloader } from './components/ArtifactsDownloader.tsx';
 import { SettingsModal } from './components/SettingsModal.tsx';
@@ -280,10 +280,7 @@ export default function App() {
             )}
 
             {activeTab === 'gsc' && (
-              <GoogleSearchConsoleCard
-                status={activeJob.searchConsoleStatus}
-                targetDomain={activeJob.targetDomain}
-              />
+              <IndexingReadinessPanel job={activeJob} />
             )}
 
             {/* Downloadable Artifacts & Reports */}
