@@ -52,7 +52,6 @@ export async function createSafeAutoFixPullRequest(input: {
   }
 
   const api = 'https://api.github.com';
-  const headers = { };
   const repo = await githubRequest<{ default_branch: string }>(`${api}/repos/${repository}`, token);
   const base = repo.default_branch || 'main';
   const branch = `autoindex/seo-fix-${new Date().toISOString().replace(/[^0-9]/g, '').slice(0, 14)}-${randomUUID().slice(0, 6)}`;
