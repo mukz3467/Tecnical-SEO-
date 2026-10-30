@@ -2,16 +2,15 @@ import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'node:path';
 import app from './server/app.ts';
-
-const port = Number(process.env.PORT || 3000);
-const isProd = process.env.NODE_ENV === 'production';
+import { config } from './server/config.ts';
 
 async function startServer() {
-  if (!isProd) {
+  if (!config.isProd) {
     const vite = await createViteServer({
-      server: { middlewareMode: true, hmr: process.env.DISABLE_HMR !== 'true' },
-      appType: 'spa'
+      server: { middlewareMode: true, hmr: !config.disableHmr },
+      appType: 'spa',
     });
+
     app.use(vite.middlewares);
   } else {
     app.use(express.static('dist'));
@@ -20,12 +19,12 @@ async function startServer() {
     });
   }
 
-  app.listen(port, '0.0.0.0', () => {
-    console.log(`AutoIndex AI server running at http://0.0.0.0:${port}`);
+  app.listen(config.port, '0.0.0.0', () => {
+    console.log(`AutoIndex AI server running at http://0.0.0.0:${config.port}`);
   });
 }
 
-startServer().catch(err => {
+startServer().catch((err) => {
   console.error('Failed to start server:', err);
   process.exit(1);
 });
